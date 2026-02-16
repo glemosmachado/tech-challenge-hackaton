@@ -8,5 +8,11 @@ export const createExamSchema = z.object({
   grade: z.string().min(1),
   topic: z.string().min(1),
 
-  questionIds: z.array(z.string().min(1)).min(1).max(50)
+  questionIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .max(50)
+    .refine((arr) => new Set(arr).size === arr.length, {
+      message: "questionIds must be unique"
+    })
 });

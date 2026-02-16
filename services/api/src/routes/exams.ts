@@ -1,11 +1,84 @@
 import { Router } from "express";
 import { Types } from "mongoose";
-import { createExamSchema } from "../schemas/exam.schema";
 import { ExamModel } from "../models/exam";
 import { QuestionModel } from "../models/question";
+import { createExamSchema } from "../schemas/exam.schema";
+import { composeExamSchema } from "../schemas/exam.compose.schema";
 import { shuffled, range } from "../utils/shuffle";
 
 export const examsRouter = Router();
+
+examsRouter.post("/compose", async (req, res) => {
+  const parsed = composeExamSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
+  }
+
+  const { teacherId, title, subject, grade, topic, qty, difficulty } =
+    parsed.data;
+
+  const filter: Record<string, unknown> = { teacherId, subject, grade, topic };
+  if (difficulty) filter.difficulty = difficulty;
+
+  const pool = await QuestionModel.find(filter).limit(500);
+  if (pool.length < qty) {
+    return res.status(400).json({
+      error: "NOT_ENOUGH_QUESTIONS",
+      details: { available: pool.length, requested: qty }
+    });
+  }
+
+  const selected = shuffled(pool).slice(0, qty);
+  const objectIds = selected.map((q) => new Types.ObjectId(String(q._id)));
+  const baseOrder = objectIds;
+
+  function buildVersion(version: "A" | "B", avoidOrder?: string[]) {
+    let questionOrderStr = shuffled(baseOrder).map(String);
+
+    if (avoidOrder) {
+      let tries = 0;
+      while (
+        tries < 10 &&
+        questionOrderStr.join(",") === avoidOrder.join(",")
+      ) {
+        questionOrderStr = shuffled(baseOrder).map(String);
+        tries++;
+      }
+    }
+
+    const optionsOrderByQuestion: Record<string, number[]> = {};
+    for (const q of selected) {
+      if (q.type === "MCQ" && Array.isArray(q.options)) {
+        optionsOrderByQuestion[String(q._id)] = shuffled(
+          range(q.options.length)
+        );
+      }
+    }
+
+    return {
+      version,
+      questionOrder: questionOrderStr.map((id) => new Types.ObjectId(id)),
+      optionsOrderByQuestion
+    };
+  }
+
+  const vA = buildVersion("A");
+  const vB = buildVersion("B", vA.questionOrder.map(String));
+
+  const created = await ExamModel.create({
+    teacherId,
+    title,
+    subject,
+    grade,
+    topic,
+    questionIds: baseOrder,
+    versions: [vA, vB]
+  });
+
+  return res.status(201).json(created);
+});
 
 examsRouter.post("/", async (req, res) => {
   const parsed = createExamSchema.safeParse(req.body);
