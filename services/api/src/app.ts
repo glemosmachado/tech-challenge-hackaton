@@ -3,6 +3,7 @@ import cors from "cors";
 import { healthRouter } from "./routes/health";
 import { questionsRouter } from "./routes/questions";
 import { examsRouter } from "./routes/exams";
+import { authRouter } from "./routes/auth";
 
 export function createApp() {
   const app = express();
@@ -11,6 +12,7 @@ export function createApp() {
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/health", healthRouter);
+  app.use("/auth", authRouter);
   app.use("/questions", questionsRouter);
   app.use("/exams", examsRouter);
 
