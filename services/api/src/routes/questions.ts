@@ -10,8 +10,15 @@ questionsRouter.post("/", async (req, res) => {
     return res.status(400).json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
   }
 
-  const created = await QuestionModel.create(parsed.data);
-  return res.status(201).json(created);
+  try {
+    const created = await QuestionModel.create(parsed.data);
+    return res.status(201).json(created);
+  } catch (err: any) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: "DUPLICATE_QUESTION" });
+    }
+    throw err;
+  }
 });
 
 questionsRouter.get("/", async (req, res) => {

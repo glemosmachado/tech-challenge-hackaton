@@ -16,11 +16,12 @@ examsRouter.post("/compose", async (req, res) => {
       .json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
   }
 
-  const { teacherId, title, subject, grade, topic, qty, difficulty } =
+  const { teacherId, title, subject, grade, topic, qty, difficulty, types } =
     parsed.data;
 
   const filter: Record<string, unknown> = { teacherId, subject, grade, topic };
   if (difficulty) filter.difficulty = difficulty;
+  if (types?.length) filter.type = { $in: types };
 
   const pool = await QuestionModel.find(filter).limit(500);
   if (pool.length < qty) {
@@ -192,12 +193,13 @@ examsRouter.get("/:id/render", async (req, res) => {
         };
       }
 
-      if (q.type === "TF") {
+      if (q.type === "DISC") {
         return {
           id: String(q._id),
           type: q.type,
           statement: q.statement,
-          answerKey: q.correctBoolean ?? null
+          answerKey: q.expectedAnswer ?? null,
+          rubric: q.rubric ?? null
         };
       }
 
