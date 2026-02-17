@@ -1,10 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import type { ReactElement } from "react";
 import { useAuth } from "../auth/useAuth";
 import LoginPage from "../screens/LoginPage";
 import TeacherHome from "../screens/TeacherHome";
 import StudentHome from "../screens/StudentHome";
 
-function RequireRole({ role, children }: { role: "TEACHER" | "STUDENT"; children: JSX.Element }) {
+function RequireRole({ role, children }: { role: "TEACHER" | "STUDENT"; children: ReactElement }) {
   const { user, loading } = useAuth();
   if (loading) return <div style={{ padding: 24 }}>Carregando...</div>;
   if (!user) return <Navigate to="/login" replace />;
