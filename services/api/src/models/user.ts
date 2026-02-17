@@ -1,26 +1,27 @@
-import { Schema, model, models } from "mongoose";
+import mongoose, { Schema, model, type Model } from "mongoose";
 
-export type UserRole = "TEACHER" | "STUDENT";
+export type UserRole = "TEACHER" | "STUDENT" | "ADMIN";
 
 export interface User {
+  name: string;
   email: string;
   passwordHash: string;
   role: UserRole;
-  name: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const userSchema = new Schema<User>(
   {
-    email: { type: String, required: true, unique: true, index: true },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
-    role: { type: String, required: true, enum: ["TEACHER", "STUDENT"], index: true },
-    name: { type: String, required: true }
+    role: { type: String, required: true, enum: ["TEACHER", "STUDENT", "ADMIN"], index: true }
   },
   { timestamps: true }
 );
 
-export const UserModel = models.User || model<User>("User", userSchema);
+export const UserModel: Model<User> =
+  (mongoose.models.User as Model<User>) || model<User>("User", userSchema);
 
 export default UserModel;

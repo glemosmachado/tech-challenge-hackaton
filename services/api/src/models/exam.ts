@@ -1,4 +1,4 @@
-import { Schema, model, models, type Model, type Types } from "mongoose";
+import mongoose, { Schema, model, type Model, type Types } from "mongoose";
 
 export interface Exam {
   teacherId: string;
@@ -26,6 +26,7 @@ const examSchema = new Schema<Exam>(
 );
 
 export const ExamModel: Model<Exam> =
-  (models.Exam as Model<Exam>) || model<Exam>("Exam", examSchema);
+  (mongoose.models.Exam as Model<Exam>) ||
+  model<Exam>("Exam", examSchema);
 
 export default ExamModel;
