@@ -5,6 +5,7 @@ import { QuestionModel } from "../models/question";
 import { createExamSchema } from "../schemas/exam.schema";
 import { composeExamSchema } from "../schemas/exam.compose.schema";
 import { shuffled, range } from "../utils/shuffle";
+import { requireAuth, requireRole } from "../middlewares/auth";
 
 export const examsRouter = Router();
 
@@ -14,7 +15,9 @@ function isObjectIdString(value: unknown): value is string {
 
 type Replacement = { oldQuestionId: string; newQuestionId: string };
 
-function validateReplacements(input: unknown): { replacements: Replacement[]; regenerateOptionsForReplacedMCQ: boolean } | null {
+function validateReplacements(
+  input: unknown
+): { replacements: Replacement[]; regenerateOptionsForReplacedMCQ: boolean } | null {
   if (!input || typeof input !== "object") return null;
   const body = input as any;
 
@@ -38,13 +41,14 @@ function validateReplacements(input: unknown): { replacements: Replacement[]; re
   return { replacements: normalized, regenerateOptionsForReplacedMCQ };
 }
 
-examsRouter.post("/compose", async (req, res) => {
+examsRouter.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) => {
   const parsed = composeExamSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
   }
 
-  const { teacherId, title, subject, grade, topic, qty, difficulty, types } = parsed.data;
+  const teacherId = req.user!.sub;
+  const { title, subject, grade, topic, qty, difficulty, types } = parsed.data;
 
   const filter: Record<string, unknown> = { teacherId, subject, grade, topic };
   if (difficulty) filter.difficulty = difficulty;
@@ -103,16 +107,17 @@ examsRouter.post("/compose", async (req, res) => {
   return res.status(201).json(created);
 });
 
-examsRouter.post("/", async (req, res) => {
+examsRouter.post("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
   const parsed = createExamSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
   }
 
-  const { teacherId, title, subject, grade, topic, questionIds } = parsed.data;
+  const teacherId = req.user!.sub;
+  const { title, subject, grade, topic, questionIds } = parsed.data;
 
   const objectIds = questionIds.map((id) => new Types.ObjectId(id));
-  const questions = await QuestionModel.find({ _id: { $in: objectIds } });
+  const questions = await QuestionModel.find({ _id: { $in: objectIds }, teacherId });
 
   if (questions.length !== objectIds.length) {
     return res.status(400).json({ error: "INVALID_QUESTION_IDS" });
@@ -161,36 +166,37 @@ examsRouter.post("/", async (req, res) => {
   return res.status(201).json(created);
 });
 
-examsRouter.get("/", async (req, res) => {
-  const teacherId = req.query.teacherId as string | undefined;
-  const filter = teacherId ? { teacherId } : {};
-  const items = await ExamModel.find(filter).sort({ createdAt: -1 }).limit(50);
+examsRouter.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
+  const teacherId = req.user!.sub;
+  const items = await ExamModel.find({ teacherId }).sort({ createdAt: -1 }).limit(50);
   return res.json({ total: items.length, items });
 });
 
-examsRouter.get("/:id", async (req, res) => {
+examsRouter.get("/:id", requireAuth, requireRole("TEACHER"), async (req, res) => {
   if (!isObjectIdString(req.params.id)) {
     return res.status(400).json({ error: "INVALID_ID" });
   }
 
-  const exam = await ExamModel.findById(req.params.id);
+  const teacherId = req.user!.sub;
+  const exam = await ExamModel.findOne({ _id: req.params.id, teacherId });
   if (!exam) return res.status(404).json({ error: "NOT_FOUND" });
 
   return res.json(exam);
 });
 
-examsRouter.delete("/:id", async (req, res) => {
+examsRouter.delete("/:id", requireAuth, requireRole("TEACHER"), async (req, res) => {
   if (!isObjectIdString(req.params.id)) {
     return res.status(400).json({ error: "INVALID_ID" });
   }
 
-  const deleted = await ExamModel.findByIdAndDelete(req.params.id);
+  const teacherId = req.user!.sub;
+  const deleted = await ExamModel.findOneAndDelete({ _id: req.params.id, teacherId });
   if (!deleted) return res.status(404).json({ error: "NOT_FOUND" });
 
   return res.status(204).send();
 });
 
-examsRouter.post("/:id/replace-questions", async (req, res) => {
+examsRouter.post("/:id/replace-questions", requireAuth, requireRole("TEACHER"), async (req, res) => {
   if (!isObjectIdString(req.params.id)) {
     return res.status(400).json({ error: "INVALID_ID" });
   }
@@ -200,9 +206,10 @@ examsRouter.post("/:id/replace-questions", async (req, res) => {
     return res.status(400).json({ error: "VALIDATION_ERROR" });
   }
 
+  const teacherId = req.user!.sub;
   const { replacements, regenerateOptionsForReplacedMCQ } = parsedBody;
 
-  const exam = await ExamModel.findById(req.params.id);
+  const exam = await ExamModel.findOne({ _id: req.params.id, teacherId });
   if (!exam) return res.status(404).json({ error: "NOT_FOUND" });
 
   const oldIds = replacements.map((r) => r.oldQuestionId);
@@ -215,15 +222,16 @@ examsRouter.post("/:id/replace-questions", async (req, res) => {
     }
   }
 
-  const newQuestions = await QuestionModel.find({ _id: { $in: newIds.map((id) => new Types.ObjectId(id)) } });
+  const newQuestions = await QuestionModel.find({
+    _id: { $in: newIds.map((id) => new Types.ObjectId(id)) },
+    teacherId
+  });
+
   if (newQuestions.length !== newIds.length) {
     return res.status(400).json({ error: "INVALID_NEW_QUESTION_IDS" });
   }
 
   for (const q of newQuestions) {
-    if (q.teacherId !== exam.teacherId) {
-      return res.status(400).json({ error: "NEW_QUESTION_TEACHER_MISMATCH", details: { questionId: String(q._id) } });
-    }
     if (q.subject !== exam.subject || q.grade !== exam.grade || q.topic !== exam.topic) {
       return res.status(400).json({ error: "NEW_QUESTION_FILTER_MISMATCH", details: { questionId: String(q._id) } });
     }
@@ -275,10 +283,15 @@ examsRouter.post("/:id/replace-questions", async (req, res) => {
   return res.json(saved);
 });
 
-examsRouter.get("/:id/render", async (req, res) => {
+examsRouter.get("/:id/render", requireAuth, async (req, res) => {
   const version = (req.query.version as string) ?? "A";
   if (version !== "A" && version !== "B") {
     return res.status(400).json({ error: "INVALID_VERSION" });
+  }
+
+  const mode = (req.query.mode as string) ?? "teacher";
+  if (mode !== "teacher" && mode !== "student") {
+    return res.status(400).json({ error: "INVALID_MODE" });
   }
 
   if (!isObjectIdString(req.params.id)) {
@@ -287,6 +300,12 @@ examsRouter.get("/:id/render", async (req, res) => {
 
   const exam = await ExamModel.findById(req.params.id);
   if (!exam) return res.status(404).json({ error: "NOT_FOUND" });
+
+  if (req.user!.role === "TEACHER") {
+    if (exam.teacherId !== req.user!.sub) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+  }
 
   const v = exam.versions.find((x) => x.version === version);
   if (!v) return res.status(404).json({ error: "VERSION_NOT_FOUND" });
@@ -303,6 +322,15 @@ examsRouter.get("/:id/render", async (req, res) => {
         const order = (v.optionsOrderByQuestion as any)[String(q._id)] ?? range(q.options.length);
         const options = order.map((idx: number) => q.options![idx]);
 
+        if (mode === "student") {
+          return {
+            id: String(q._id),
+            type: q.type,
+            statement: q.statement,
+            options
+          };
+        }
+
         const correctIndex =
           typeof q.correctIndex === "number" ? order.indexOf(q.correctIndex) : undefined;
 
@@ -316,6 +344,14 @@ examsRouter.get("/:id/render", async (req, res) => {
       }
 
       if (q.type === "DISC") {
+        if (mode === "student") {
+          return {
+            id: String(q._id),
+            type: q.type,
+            statement: q.statement
+          };
+        }
+
         return {
           id: String(q._id),
           type: q.type,
@@ -336,7 +372,8 @@ examsRouter.get("/:id/render", async (req, res) => {
       subject: exam.subject,
       grade: exam.grade,
       topic: exam.topic,
-      version
+      version,
+      mode
     },
     questions: renderedQuestions
   });
