@@ -46,21 +46,21 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     };
   }, []);
 
-  async function login(email: string, password: string) {
+  async function signIn(email: string, password: string) {
     const res = await apiLogin(email, password);
     saveToken(res.token);
     setToken(res.token);
     setUser(res.user);
   }
 
-  function logout() {
+  function signOut() {
     clearToken();
     setToken(null);
     setUser(null);
   }
 
   const value = useMemo(
-    () => ({ user, token, isBootstrapping, login, logout }),
+    () => ({ user, token, isBootstrapping, signIn, signOut }),
     [user, token, isBootstrapping]
   );
 
