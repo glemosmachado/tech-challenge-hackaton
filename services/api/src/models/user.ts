@@ -1,4 +1,4 @@
-import { Schema, model } from "mongoose";
+import { Schema, model, models } from "mongoose";
 
 export type UserRole = "TEACHER" | "STUDENT";
 
@@ -21,4 +21,6 @@ const userSchema = new Schema<User>(
   { timestamps: true }
 );
 
-export const UserModel = model<User>("User", userSchema);
+export const UserModel = models.User || model<User>("User", userSchema);
+
+export default UserModel;

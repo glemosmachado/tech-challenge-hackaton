@@ -1,367 +1,160 @@
 import { Router } from "express";
-import { Types } from "mongoose";
-import { ExamModel } from "../models/exam";
-import { QuestionModel } from "../models/question";
-import { createExamSchema } from "../schemas/exam.schema";
-import { composeExamSchema } from "../schemas/exam.compose.schema";
-import { shuffled, range } from "../utils/shuffle";
-import { requireAuth, requireRole } from "../middlewares/auth";
+import Exam from "../models/exam.js";
+import Question from "../models/question.js";
+import { requireAuth, requireRole } from "../middlewares/auth.js";
 
-export const examsRouter = Router();
+const router = Router();
 
-function isObjectIdString(value: unknown): value is string {
-  return typeof value === "string" && /^[a-fA-F0-9]{24}$/.test(value);
+function shuffle<T>(arr: T[]) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
-type Replacement = { oldQuestionId: string; newQuestionId: string };
+function buildVersion(questionDocs: any[], version: "A" | "B") {
+  const questionOrder = shuffle(questionDocs.map((q) => String(q._id)));
 
-function validateReplacements(
-  input: unknown
-): { replacements: Replacement[]; regenerateOptionsForReplacedMCQ: boolean } | null {
-  if (!input || typeof input !== "object") return null;
-  const body = input as any;
-
-  const replacements = body.replacements;
-  const regenerateOptionsForReplacedMCQ = body.regenerateOptionsForReplacedMCQ !== false;
-
-  if (!Array.isArray(replacements) || replacements.length < 1 || replacements.length > 10) return null;
-
-  const normalized: Replacement[] = [];
-  for (const r of replacements) {
-    if (!r || typeof r !== "object") return null;
-    if (!isObjectIdString(r.oldQuestionId) || !isObjectIdString(r.newQuestionId)) return null;
-    normalized.push({ oldQuestionId: r.oldQuestionId, newQuestionId: r.newQuestionId });
+  const optionsOrderByQuestion: Record<string, number[]> = {};
+  for (const q of questionDocs) {
+    if (q.type === "MCQ" && Array.isArray(q.options)) {
+      optionsOrderByQuestion[String(q._id)] = shuffle(q.options.map((_: any, idx: number) => idx));
+    }
   }
 
-  const oldSet = new Set(normalized.map((x) => x.oldQuestionId));
-  const newSet = new Set(normalized.map((x) => x.newQuestionId));
-  if (oldSet.size !== normalized.length) return null;
-  if (newSet.size !== normalized.length) return null;
-
-  return { replacements: normalized, regenerateOptionsForReplacedMCQ };
+  return { version, questionOrder, optionsOrderByQuestion };
 }
 
-examsRouter.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const parsed = composeExamSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
-  }
-
-  const teacherId = req.user!.sub;
-  const { title, subject, grade, topic, qty, difficulty, types } = parsed.data;
-
-  const filter: Record<string, unknown> = { teacherId, subject, grade, topic };
-  if (difficulty) filter.difficulty = difficulty;
-  if (types?.length) filter.type = { $in: types };
-
-  const pool = await QuestionModel.find(filter).limit(500);
-  if (pool.length < qty) {
-    return res.status(400).json({
-      error: "NOT_ENOUGH_QUESTIONS",
-      details: { available: pool.length, requested: qty }
-    });
-  }
-
-  const selected = shuffled(pool).slice(0, qty);
-  const objectIds = selected.map((q) => new Types.ObjectId(String(q._id)));
-  const baseOrder = objectIds;
-
-  function buildVersion(version: "A" | "B", avoidOrder?: string[]) {
-    let questionOrderStr = shuffled(baseOrder).map(String);
-
-    if (avoidOrder) {
-      let tries = 0;
-      while (tries < 10 && questionOrderStr.join(",") === avoidOrder.join(",")) {
-        questionOrderStr = shuffled(baseOrder).map(String);
-        tries++;
-      }
-    }
-
-    const optionsOrderByQuestion: Record<string, number[]> = {};
-    for (const q of selected) {
-      if (q.type === "MCQ" && Array.isArray(q.options)) {
-        optionsOrderByQuestion[String(q._id)] = shuffled(range(q.options.length));
-      }
-    }
-
-    return {
-      version,
-      questionOrder: questionOrderStr.map((id) => new Types.ObjectId(id)),
-      optionsOrderByQuestion
-    };
-  }
-
-  const vA = buildVersion("A");
-  const vB = buildVersion("B", vA.questionOrder.map(String));
-
-  const created = await ExamModel.create({
-    teacherId,
-    title,
-    subject,
-    grade,
-    topic,
-    questionIds: baseOrder,
-    versions: [vA, vB]
-  });
-
-  return res.status(201).json(created);
+router.get("/", requireAuth, requireRole("TEACHER"), async (_req, res) => {
+  const items = await Exam.find({}).sort({ createdAt: -1 }).limit(200);
+  const total = await Exam.countDocuments({});
+  return res.json({ total, items });
 });
 
-examsRouter.post("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const parsed = createExamSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
-  }
-
-  const teacherId = req.user!.sub;
-  const { title, subject, grade, topic, questionIds } = parsed.data;
-
-  const objectIds = questionIds.map((id) => new Types.ObjectId(id));
-  const questions = await QuestionModel.find({ _id: { $in: objectIds }, teacherId });
-
-  if (questions.length !== objectIds.length) {
-    return res.status(400).json({ error: "INVALID_QUESTION_IDS" });
-  }
-
-  const baseOrder = objectIds;
-
-  function buildVersion(version: "A" | "B", avoidOrder?: string[]) {
-    let questionOrderStr = shuffled(baseOrder).map(String);
-
-    if (avoidOrder) {
-      let tries = 0;
-      while (tries < 10 && questionOrderStr.join(",") === avoidOrder.join(",")) {
-        questionOrderStr = shuffled(baseOrder).map(String);
-        tries++;
-      }
-    }
-
-    const optionsOrderByQuestion: Record<string, number[]> = {};
-    for (const q of questions) {
-      if (q.type === "MCQ" && Array.isArray(q.options)) {
-        optionsOrderByQuestion[String(q._id)] = shuffled(range(q.options.length));
-      }
-    }
-
-    return {
-      version,
-      questionOrder: questionOrderStr.map((id) => new Types.ObjectId(id)),
-      optionsOrderByQuestion
-    };
-  }
-
-  const vA = buildVersion("A");
-  const vB = buildVersion("B", vA.questionOrder.map(String));
-
-  const created = await ExamModel.create({
-    teacherId,
-    title,
-    subject,
-    grade,
-    topic,
-    questionIds: baseOrder,
-    versions: [vA, vB]
-  });
-
-  return res.status(201).json(created);
-});
-
-examsRouter.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const teacherId = req.user!.sub;
-  const items = await ExamModel.find({ teacherId }).sort({ createdAt: -1 }).limit(50);
-  return res.json({ total: items.length, items });
-});
-
-examsRouter.get("/:id", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  if (!isObjectIdString(req.params.id)) {
-    return res.status(400).json({ error: "INVALID_ID" });
-  }
-
-  const teacherId = req.user!.sub;
-  const exam = await ExamModel.findOne({ _id: req.params.id, teacherId });
-  if (!exam) return res.status(404).json({ error: "NOT_FOUND" });
-
-  return res.json(exam);
-});
-
-examsRouter.delete("/:id", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  if (!isObjectIdString(req.params.id)) {
-    return res.status(400).json({ error: "INVALID_ID" });
-  }
-
-  const teacherId = req.user!.sub;
-  const deleted = await ExamModel.findOneAndDelete({ _id: req.params.id, teacherId });
-  if (!deleted) return res.status(404).json({ error: "NOT_FOUND" });
-
+router.delete("/:id", requireAuth, requireRole("TEACHER"), async (req, res) => {
+  const id = String(req.params.id);
+  const deleted = await Exam.findByIdAndDelete(id);
+  if (!deleted) return res.status(404).json({ message: "not found" });
   return res.status(204).send();
 });
 
-examsRouter.post("/:id/replace-questions", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  if (!isObjectIdString(req.params.id)) {
-    return res.status(400).json({ error: "INVALID_ID" });
+router.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) => {
+  const title = String(req.body?.title ?? "").trim();
+  const subject = String(req.body?.subject ?? "").trim();
+  const grade = String(req.body?.grade ?? "").trim();
+  const qty = Number(req.body?.qty ?? 0);
+
+  const topicsFromArray = Array.isArray(req.body?.topics) ? req.body.topics : null;
+  const topicSingle = String(req.body?.topic ?? "").trim();
+
+  const topics = topicsFromArray
+    ? topicsFromArray.map((t: any) => String(t).trim()).filter((t: string) => t.length > 0)
+    : topicSingle
+      ? [topicSingle]
+      : [];
+
+  const types = Array.isArray(req.body?.types)
+    ? req.body.types.map((t: any) => String(t).trim()).filter((t: string) => t.length > 0)
+    : ["MCQ", "DISC"];
+
+  const difficulty = req.body?.difficulty ? String(req.body.difficulty).trim() : undefined;
+
+  if (!title || !subject || !grade) {
+    return res.status(400).json({ message: "title, subject and grade are required" });
   }
 
-  const parsedBody = validateReplacements(req.body);
-  if (!parsedBody) {
-    return res.status(400).json({ error: "VALIDATION_ERROR" });
+  if (!Number.isFinite(qty) || qty <= 0 || qty > 50) {
+    return res.status(400).json({ message: "qty must be between 1 and 50" });
   }
 
-  const teacherId = req.user!.sub;
-  const { replacements, regenerateOptionsForReplacedMCQ } = parsedBody;
-
-  const exam = await ExamModel.findOne({ _id: req.params.id, teacherId });
-  if (!exam) return res.status(404).json({ error: "NOT_FOUND" });
-
-  const oldIds = replacements.map((r) => r.oldQuestionId);
-  const newIds = replacements.map((r) => r.newQuestionId);
-
-  const examQuestionIdsSet = new Set(exam.questionIds.map((x) => String(x)));
-  for (const oldId of oldIds) {
-    if (!examQuestionIdsSet.has(oldId)) {
-      return res.status(400).json({ error: "OLD_QUESTION_NOT_IN_EXAM", details: { oldQuestionId: oldId } });
-    }
+  if (topics.length === 0) {
+    return res.status(400).json({ message: "topics is required (select at least 1 topic)" });
   }
 
-  const newQuestions = await QuestionModel.find({
-    _id: { $in: newIds.map((id) => new Types.ObjectId(id)) },
-    teacherId
-  });
+  const match: Record<string, any> = {
+    subject,
+    grade,
+    topic: { $in: topics },
+    type: { $in: types }
+  };
 
-  if (newQuestions.length !== newIds.length) {
-    return res.status(400).json({ error: "INVALID_NEW_QUESTION_IDS" });
-  }
+  if (difficulty) match.difficulty = difficulty;
 
-  for (const q of newQuestions) {
-    if (q.subject !== exam.subject || q.grade !== exam.grade || q.topic !== exam.topic) {
-      return res.status(400).json({ error: "NEW_QUESTION_FILTER_MISMATCH", details: { questionId: String(q._id) } });
-    }
-  }
-
-  const replacementMap = new Map<string, string>();
-  for (const r of replacements) replacementMap.set(r.oldQuestionId, r.newQuestionId);
-
-  const updatedQuestionIds = exam.questionIds.map((qid) => {
-    const s = String(qid);
-    const replaced = replacementMap.get(s);
-    return replaced ? new Types.ObjectId(replaced) : qid;
-  });
-
-  const updatedVersions = exam.versions.map((v) => {
-    const updatedOrder = v.questionOrder.map((qid) => {
-      const s = String(qid);
-      const replaced = replacementMap.get(s);
-      return replaced ? new Types.ObjectId(replaced) : qid;
+  const availableCount = await Question.countDocuments(match);
+  if (availableCount < qty) {
+    return res.status(400).json({
+      message: "not enough questions for selected filters",
+      available: availableCount,
+      requested: qty,
+      filters: { subject, grade, topics, types, difficulty: difficulty ?? null }
     });
+  }
 
-    const updatedOptionsMap: Record<string, number[]> = { ...(v.optionsOrderByQuestion as any) };
+  const selected = await Question.aggregate([{ $match: match }, { $sample: { size: qty } }]);
 
-    for (const r of replacements) {
-      delete updatedOptionsMap[r.oldQuestionId];
-    }
+  const questionIds = selected.map((q: any) => String(q._id));
+  const versions = [buildVersion(selected, "A"), buildVersion(selected, "B")];
 
-    if (regenerateOptionsForReplacedMCQ) {
-      const newById = new Map(newQuestions.map((q) => [String(q._id), q]));
-      for (const r of replacements) {
-        const nq = newById.get(r.newQuestionId);
-        if (nq && nq.type === "MCQ" && Array.isArray(nq.options)) {
-          updatedOptionsMap[r.newQuestionId] = shuffled(range(nq.options.length));
-        }
-      }
-    }
+  const teacherId = req.user?.sub ?? "unknown-teacher";
 
-    return {
-      version: v.version,
-      questionOrder: updatedOrder,
-      optionsOrderByQuestion: updatedOptionsMap
-    };
+  const doc = await Exam.create({
+    teacherId,
+    title,
+    subject,
+    grade,
+    topic: topics.join(","),
+    questionIds,
+    versions
   });
 
-  exam.questionIds = updatedQuestionIds;
-  exam.versions = updatedVersions as any;
-
-  const saved = await exam.save();
-  return res.json(saved);
+  return res.status(201).json(doc);
 });
 
-examsRouter.get("/:id/render", requireAuth, async (req, res) => {
-  const version = (req.query.version as string) ?? "A";
-  if (version !== "A" && version !== "B") {
-    return res.status(400).json({ error: "INVALID_VERSION" });
-  }
+router.get("/:id/render", requireAuth, async (req, res) => {
+  const id = String(req.params.id);
+  const version = String(req.query.version ?? "A") === "B" ? "B" : "A";
+  const mode = String(req.query.mode ?? "student") === "teacher" ? "teacher" : "student";
 
-  const mode = (req.query.mode as string) ?? "teacher";
-  if (mode !== "teacher" && mode !== "student") {
-    return res.status(400).json({ error: "INVALID_MODE" });
-  }
+  const exam = await Exam.findById(id);
+  if (!exam) return res.status(404).json({ message: "not found" });
 
-  if (!isObjectIdString(req.params.id)) {
-    return res.status(400).json({ error: "INVALID_ID" });
-  }
+  const v = (exam.versions ?? []).find((x: any) => x.version === version);
+  if (!v) return res.status(400).json({ message: "invalid version" });
 
-  const exam = await ExamModel.findById(req.params.id);
-  if (!exam) return res.status(404).json({ error: "NOT_FOUND" });
+  const questionDocs = await Question.find({ _id: { $in: v.questionOrder } });
+  const byId = new Map(questionDocs.map((q: any) => [String(q._id), q]));
 
-  if (req.user!.role === "TEACHER") {
-    if (exam.teacherId !== req.user!.sub) {
-      return res.status(404).json({ error: "NOT_FOUND" });
-    }
-  }
-
-  const v = exam.versions.find((x) => x.version === version);
-  if (!v) return res.status(404).json({ error: "VERSION_NOT_FOUND" });
-
-  const questions = await QuestionModel.find({ _id: { $in: exam.questionIds } });
-  const map = new Map(questions.map((q) => [String(q._id), q]));
-
-  const renderedQuestions = v.questionOrder
-    .map((qid) => {
-      const q = map.get(String(qid));
+  const questions = v.questionOrder
+    .map((qid: string) => {
+      const q = byId.get(String(qid));
       if (!q) return null;
 
-      if (q.type === "MCQ" && Array.isArray(q.options)) {
-        const order = (v.optionsOrderByQuestion as any)[String(q._id)] ?? range(q.options.length);
-        const options = order.map((idx: number) => q.options![idx]);
+      if (q.type === "MCQ") {
+        const order = v.optionsOrderByQuestion?.[String(q._id)] ?? q.options.map((_: any, idx: number) => idx);
+        const options = order.map((idx: number) => q.options[idx]);
 
-        if (mode === "student") {
-          return {
-            id: String(q._id),
-            type: q.type,
-            statement: q.statement,
-            options
-          };
-        }
-
-        const correctIndex =
-          typeof q.correctIndex === "number" ? order.indexOf(q.correctIndex) : undefined;
+        const answerKey =
+          mode === "teacher"
+            ? order.findIndex((idx: number) => idx === q.correctIndex)
+            : undefined;
 
         return {
           id: String(q._id),
-          type: q.type,
+          type: "MCQ",
           statement: q.statement,
           options,
-          answerKey: typeof correctIndex === "number" ? correctIndex : null
+          ...(mode === "teacher" ? { answerKey } : {})
         };
       }
 
-      if (q.type === "DISC") {
-        if (mode === "student") {
-          return {
-            id: String(q._id),
-            type: q.type,
-            statement: q.statement
-          };
-        }
-
-        return {
-          id: String(q._id),
-          type: q.type,
-          statement: q.statement,
-          expectedAnswer: q.expectedAnswer ?? null,
-          rubric: q.rubric ?? null
-        };
-      }
-
-      return null;
+      return {
+        id: String(q._id),
+        type: "DISC",
+        statement: q.statement,
+        ...(mode === "teacher" ? { expectedAnswer: q.expectedAnswer ?? null, rubric: q.rubric ?? null } : {})
+      };
     })
     .filter(Boolean);
 
@@ -375,6 +168,8 @@ examsRouter.get("/:id/render", requireAuth, async (req, res) => {
       version,
       mode
     },
-    questions: renderedQuestions
+    questions
   });
 });
+
+export default router;

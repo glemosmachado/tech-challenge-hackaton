@@ -1,49 +1,101 @@
 import { Router } from "express";
-import { QuestionModel } from "../models/question";
-import { createQuestionSchema, listQuestionsQuerySchema } from "../schemas/question.schema";
-import { requireAuth, requireRole } from "../middlewares/auth";
+import Question from "../models/question.js";
+import { requireAuth, requireRole } from "../middlewares/auth.js";
 
-export const questionsRouter = Router();
+const router = Router();
 
-questionsRouter.post("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const parsed = createQuestionSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
+router.get("/topics", requireAuth, requireRole("TEACHER"), async (req, res) => {
+  const subject = (req.query.subject as string | undefined)?.trim() ?? "";
+  const grade = (req.query.grade as string | undefined)?.trim() ?? "";
+
+  if (!subject || !grade) {
+    return res.status(400).json({ message: "subject and grade are required" });
   }
 
-  const body = parsed.data;
+  const topics = await Question.distinct("topic", {
+    subject,
+    grade,
+    topic: { $ne: "" }
+  });
 
-  if (req.user?.role === "TEACHER" && req.user.sub) {
-    body.teacherId = req.user.sub;
-  }
+  const items = topics
+    .map((t) => String(t))
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .sort((a, b) => a.localeCompare(b));
 
-  try {
-    const created = await QuestionModel.create(body);
-    return res.status(201).json(created);
-  } catch (err: any) {
-    if (err?.code === 11000) {
-      return res.status(409).json({ error: "DUPLICATE_QUESTION" });
-    }
-    throw err;
-  }
+  return res.json({ items });
 });
 
-questionsRouter.get("/", requireAuth, async (req, res) => {
-  const parsed = listQuestionsQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "VALIDATION_ERROR", details: parsed.error.flatten() });
-  }
+router.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
+  const subject = (req.query.subject as string | undefined)?.trim() ?? "";
+  const grade = (req.query.grade as string | undefined)?.trim() ?? "";
+  const topic = (req.query.topic as string | undefined)?.trim() ?? "";
+  const difficulty = (req.query.difficulty as string | undefined)?.trim() ?? "";
+  const type = (req.query.type as string | undefined)?.trim() ?? "";
 
-  const { limit = 20, skip = 0, ...filters } = parsed.data;
+  const filter: Record<string, unknown> = {};
+  if (subject) filter.subject = subject;
+  if (grade) filter.grade = grade;
+  if (topic) filter.topic = topic;
+  if (difficulty) filter.difficulty = difficulty;
+  if (type) filter.type = type;
 
-  const effectiveFilters: Record<string, unknown> = { ...filters };
-
-  if (req.user?.role === "TEACHER") {
-    effectiveFilters.teacherId = req.user.sub;
-  }
-
-  const items = await QuestionModel.find(effectiveFilters).sort({ createdAt: -1 }).skip(skip).limit(limit);
-  const total = await QuestionModel.countDocuments(effectiveFilters);
+  const items = await Question.find(filter).sort({ createdAt: -1 }).limit(500);
+  const total = await Question.countDocuments(filter);
 
   return res.json({ total, items });
 });
+
+router.post("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
+  const {
+    teacherId,
+    subject,
+    grade,
+    topic,
+    difficulty,
+    type,
+    statement,
+    options,
+    correctIndex,
+    expectedAnswer,
+    rubric
+  } = req.body ?? {};
+
+  if (!subject || !grade || !topic || !difficulty || !type || !statement) {
+    return res.status(400).json({ message: "missing required fields" });
+  }
+
+  if (type === "MCQ") {
+    if (!Array.isArray(options) || options.length < 2) {
+      return res.status(400).json({ message: "MCQ options must be an array with at least 2 items" });
+    }
+    if (typeof correctIndex !== "number" || correctIndex < 0 || correctIndex >= options.length) {
+      return res.status(400).json({ message: "MCQ correctIndex is invalid" });
+    }
+  }
+
+  if (type === "DISC") {
+    if (typeof expectedAnswer !== "string" || expectedAnswer.trim().length === 0) {
+      return res.status(400).json({ message: "DISC expectedAnswer is required" });
+    }
+  }
+
+  const doc = await Question.create({
+    teacherId: teacherId ?? "demo-teacher",
+    subject,
+    grade,
+    topic,
+    difficulty,
+    type,
+    statement,
+    options: type === "MCQ" ? options : undefined,
+    correctIndex: type === "MCQ" ? correctIndex : undefined,
+    expectedAnswer: type === "DISC" ? expectedAnswer : undefined,
+    rubric: type === "DISC" ? rubric : undefined
+  });
+
+  return res.status(201).json(doc);
+});
+
+export default router;

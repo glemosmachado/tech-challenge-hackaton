@@ -1,11 +1,11 @@
-import { Schema, model, Types } from "mongoose";
+import { Schema, model, models, Types } from "mongoose";
 
 export type ExamVersion = "A" | "B";
 
 export interface ExamVersionData {
   version: ExamVersion;
   questionOrder: Types.ObjectId[];
-  optionsOrderByQuestion: Record<string, number[]>; 
+  optionsOrderByQuestion: Record<string, number[]>;
 }
 
 export interface Exam {
@@ -47,4 +47,6 @@ const examSchema = new Schema<Exam>(
   { timestamps: true }
 );
 
-export const ExamModel = model<Exam>("Exam", examSchema);
+export const ExamModel = models.Exam || model<Exam>("Exam", examSchema);
+
+export default ExamModel;
