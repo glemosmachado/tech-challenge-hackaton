@@ -1,96 +1,153 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/useAuth";
 import {
   composeExam,
   deleteExam,
+  getTopics,
   listExams,
   renderExam,
-  type Exam,
+  type ExamDTO,
+  type ExamMode,
+  type ExamVersion,
   type RenderExamResponse,
   type Subject
 } from "../lib/api";
 
-function getErrorMessage(err: unknown, fallback: string) {
-  if (err instanceof Error) return err.message;
-  return fallback;
+function msg(e: unknown, fallback: string) {
+  return e instanceof Error ? e.message : fallback;
 }
 
 export default function TeacherHome() {
-  const { user, signOut } = useAuth();
+  const { user, token, signOut } = useAuth();
 
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+  const [error, setError] = useState("");
+  const [loadingList, setLoadingList] = useState(false);
 
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [examId, setExamId] = useState<string>("");
-  const [rendered, setRendered] = useState<RenderExamResponse | null>(null);
-
-  const [title, setTitle] = useState("Prova - Física");
+  const [title, setTitle] = useState("Prova");
   const [subject, setSubject] = useState<Subject>("physics");
   const [grade, setGrade] = useState("1ano");
-  const [topic, setTopic] = useState("cinematics");
-  const [qty, setQty] = useState(3);
+  const [mode, setMode] = useState<ExamMode>("MIXED");
+  const [count, setCount] = useState(3);
+
+  const [topics, setTopics] = useState<string[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+
+  const [exams, setExams] = useState<ExamDTO[]>([]);
+  const [examId, setExamId] = useState("");
+  const [rendered, setRendered] = useState<RenderExamResponse | null>(null);
+
+  const canCompose = !!token && !!user && selectedTopics.length > 0 && Number.isFinite(count) && count > 0;
 
   async function refresh() {
-    setErr("");
-    setLoading(true);
+    if (!token || !user) return;
+    setError("");
+    setLoadingList(true);
     try {
-      const data = await listExams();
-      setExams(data.items);
+      const items = await listExams({ token, teacherId: user.id });
+      setExams(items);
     } catch (e) {
-      setErr(getErrorMessage(e, "Erro ao listar provas"));
+      setError(msg(e, "LIST_EXAMS_FAILED"));
     } finally {
-      setLoading(false);
+      setLoadingList(false);
+    }
+  }
+
+  async function loadTopics() {
+    if (!token) return;
+    setError("");
+    setTopicsLoading(true);
+    try {
+      const t = await getTopics({ token, subject, grade });
+      setTopics(t);
+      setSelectedTopics((prev) => prev.filter((x) => t.includes(x)));
+    } catch (e) {
+      setTopics([]);
+      setSelectedTopics([]);
+      setError(msg(e, "TOPICS_FAILED"));
+    } finally {
+      setTopicsLoading(false);
     }
   }
 
   useEffect(() => {
     refresh();
-  }, []);
+  }, [token, user?.id]);
+
+  useEffect(() => {
+    loadTopics();
+  }, [token, subject, grade]);
+
+  function toggleTopic(t: string) {
+    setSelectedTopics((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  }
 
   async function onCompose() {
-    setErr("");
+    if (!token || !user) return;
+    setError("");
     try {
       const created = await composeExam({
-        title,
-        subject,
-        grade,
-        topic,
-        qty,
-        types: ["MCQ", "DISC"]
+        token,
+        payload: {
+          teacherId: user.id,
+          title,
+          subject,
+          grade,
+          topics: selectedTopics,
+          count,
+          mode
+        }
       });
-      setExamId(created._id);
+      setExamId(created.exam._id);
       setRendered(null);
       await refresh();
     } catch (e) {
-      setErr(getErrorMessage(e, "Erro ao compor prova"));
+      setError(msg(e, "COMPOSE_FAILED"));
     }
   }
 
-  async function onRender(id: string, version: "A" | "B") {
-    setErr("");
+  async function onRender(id: string, version: ExamVersion) {
+    if (!token) return;
+    setError("");
     try {
-      const data = await renderExam(id, version, "teacher");
+      const data = await renderExam({ token, examId: id, version, audience: "teacher" });
       setExamId(id);
       setRendered(data);
     } catch (e) {
-      setErr(getErrorMessage(e, "Erro ao renderizar"));
+      setError(msg(e, "RENDER_FAILED"));
     }
   }
 
   async function onDelete(id: string) {
-    setErr("");
+    if (!token) return;
+    setError("");
     try {
-      await deleteExam(id);
+      await deleteExam({ token, examId: id });
       if (examId === id) {
         setExamId("");
         setRendered(null);
       }
       await refresh();
     } catch (e) {
-      setErr(getErrorMessage(e, "Erro ao deletar"));
+      setError(msg(e, "DELETE_FAILED"));
     }
   }
+
+  const topicsUi = useMemo(() => {
+    if (topicsLoading) return <div>Carregando topics...</div>;
+    if (!topics.length) return <div>Nenhum topic para esse filtro.</div>;
+
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8, marginTop: 8 }}>
+        {topics.map((t) => (
+          <label key={t} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="checkbox" checked={selectedTopics.includes(t)} onChange={() => toggleTopic(t)} />
+            <span>{t}</span>
+          </label>
+        ))}
+      </div>
+    );
+  }, [topics, topicsLoading, selectedTopics]);
 
   return (
     <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 1100, margin: "0 auto" }}>
@@ -102,11 +159,7 @@ export default function TeacherHome() {
         </div>
       </div>
 
-      {err ? (
-        <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 12, marginBottom: 16 }}>
-          {err}
-        </div>
-      ) : null}
+      {error ? <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 12, marginBottom: 16 }}>{error}</div> : null}
 
       <section style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8, marginBottom: 16 }}>
         <h2>Compor prova</h2>
@@ -131,29 +184,34 @@ export default function TeacherHome() {
           </label>
 
           <label>
-            Topic
-            <input value={topic} onChange={(e) => setTopic(e.target.value)} style={{ display: "block", width: 180 }} />
+            Tipo
+            <select value={mode} onChange={(e) => setMode(e.target.value as ExamMode)} style={{ display: "block", width: 140 }}>
+              <option value="MIXED">MIXED</option>
+              <option value="MCQ">MCQ</option>
+              <option value="DISC">DISC</option>
+            </select>
           </label>
 
           <label>
             Quantidade
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={qty}
-              onChange={(e) => setQty(Number(e.target.value))}
-              style={{ display: "block", width: 120 }}
-            />
+            <input type="number" min={1} value={count} onChange={(e) => setCount(Number(e.target.value))} style={{ display: "block", width: 120 }} />
           </label>
 
-          <button onClick={onCompose} style={{ height: 40, alignSelf: "end" }}>
+          <button onClick={onCompose} disabled={!canCompose} style={{ height: 40, alignSelf: "end" }}>
             Compor
           </button>
 
-          <button onClick={refresh} disabled={loading} style={{ height: 40, alignSelf: "end" }}>
-            {loading ? "Carregando..." : "Atualizar lista"}
+          <button onClick={refresh} disabled={loadingList} style={{ height: 40, alignSelf: "end" }}>
+            {loadingList ? "Carregando..." : "Atualizar lista"}
           </button>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+            <strong>Topics</strong>
+            <span style={{ opacity: 0.8 }}>Selecionados: {selectedTopics.length}</span>
+          </div>
+          {topicsUi}
         </div>
       </section>
 
@@ -168,12 +226,8 @@ export default function TeacherHome() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <div>
                     <div style={{ fontWeight: 600 }}>{ex.title}</div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>
-                      {ex.subject} | {ex.grade} | {ex.topic}
-                    </div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>
-                      <code>{ex._id}</code>
-                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.75 }}>{ex.subject} | {ex.grade} | {ex.topics.join(", ")}</div>
+                    <div style={{ fontSize: 12, opacity: 0.75 }}><code>{ex._id}</code></div>
                   </div>
 
                   <div style={{ display: "flex", gap: 8, alignItems: "start", flexWrap: "wrap" }}>
@@ -189,15 +243,11 @@ export default function TeacherHome() {
 
         <div style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8 }}>
           <h2>Visualização (gabarito)</h2>
-          <div style={{ marginBottom: 8 }}>
-            ExamId: <code>{examId || "-"}</code>
-          </div>
+          <div style={{ marginBottom: 8 }}>ExamId: <code>{examId || "-"}</code></div>
 
           {rendered ? (
             <div>
-              <h3>
-                {rendered.exam.title} (Versão {rendered.exam.version})
-              </h3>
+              <h3>{rendered.exam.title} (Versão {rendered.exam.version})</h3>
 
               <ol>
                 {rendered.questions.map((q) => (
@@ -209,7 +259,7 @@ export default function TeacherHome() {
                         {q.options.map((opt, idx) => (
                           <li key={idx}>
                             {opt}
-                            {"answerKey" in q && q.answerKey === idx ? <strong> (correta)</strong> : null}
+                            {"answerKey" in q && typeof q.answerKey === "number" && q.answerKey === idx ? <strong> (correta)</strong> : null}
                           </li>
                         ))}
                       </ul>
@@ -217,12 +267,8 @@ export default function TeacherHome() {
                       <div style={{ marginTop: 6 }}>
                         {"expectedAnswer" in q ? (
                           <>
-                            <div>
-                              <strong>Resposta esperada:</strong> {q.expectedAnswer ?? "-"}
-                            </div>
-                            <div>
-                              <strong>Rubrica:</strong> {q.rubric ?? "-"}
-                            </div>
+                            <div><strong>Resposta esperada:</strong> {q.expectedAnswer ?? "-"}</div>
+                            <div><strong>Rubrica:</strong> {q.rubric ?? "-"}</div>
                           </>
                         ) : null}
                       </div>

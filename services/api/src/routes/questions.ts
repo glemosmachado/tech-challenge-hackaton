@@ -13,7 +13,13 @@ router.get("/topics", requireAuth, requireRole("TEACHER"), async (req, res) => {
   }
 
   const topics = await QuestionModel.distinct("topic", { subject, grade });
-  return res.json({ topics });
+  const sorted = topics
+    .filter((t) => typeof t === "string")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  return res.json({ topics: sorted });
 });
 
 router.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
@@ -32,19 +38,8 @@ router.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
 });
 
 router.post("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const {
-    teacherId,
-    subject,
-    grade,
-    topic,
-    difficulty,
-    type,
-    statement,
-    options,
-    correctIndex,
-    expectedAnswer,
-    rubric
-  } = req.body ?? {};
+  const { teacherId, subject, grade, topic, difficulty, type, statement, options, correctIndex, expectedAnswer, rubric } =
+    req.body ?? {};
 
   if (!teacherId || !subject || !grade || !topic || !difficulty || !type || !statement) {
     return res.status(400).json({

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { clearToken, getToken, saveToken } from "./auth";
-import { apiLogin, apiMe, type AuthUser } from "../lib/api";
+import { apiLogin, apiMe, apiRegister, type AuthUser } from "../lib/api";
 import { AuthContext } from "./context";
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -53,6 +53,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setUser(res.user);
   }
 
+  async function signUp(input: { name: string; email: string; password: string; role: "TEACHER" | "STUDENT" }) {
+    const res = await apiRegister(input);
+    saveToken(res.token);
+    setToken(res.token);
+    setUser(res.user);
+  }
+
   function signOut() {
     clearToken();
     setToken(null);
@@ -60,7 +67,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }
 
   const value = useMemo(
-    () => ({ user, token, isBootstrapping, signIn, signOut }),
+    () => ({ user, token, isBootstrapping, signIn, signUp, signOut }),
     [user, token, isBootstrapping]
   );
 

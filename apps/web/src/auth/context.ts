@@ -6,6 +6,7 @@ export type AuthContextValue = {
   token: string | null;
   isBootstrapping: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (input: { name: string; email: string; password: string; role: "TEACHER" | "STUDENT" }) => Promise<void>;
   signOut: () => void;
 };
 
@@ -14,5 +15,6 @@ export const AuthContext = createContext<AuthContextValue>({
   token: null,
   isBootstrapping: true,
   signIn: async () => {},
+  signUp: async () => {},
   signOut: () => {}
 });

@@ -1,6 +1,12 @@
 const API_URL = import.meta.env.VITE_API_BASE_URL as string;
 
 export type UserRole = "TEACHER" | "STUDENT" | "ADMIN";
+export type Subject = "physics" | "geography";
+export type QuestionType = "MCQ" | "DISC";
+export type Difficulty = "easy" | "medium" | "hard";
+export type ExamMode = "MIXED" | "MCQ" | "DISC";
+export type ExamVersion = "A" | "B";
+export type RenderAudience = "teacher" | "student";
 
 export interface AuthUser {
   id: string;
@@ -14,14 +20,11 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
-export type QuestionType = "MCQ" | "DISC";
-export type Difficulty = "easy" | "medium" | "hard";
-
 export interface QuestionDTO {
   _id?: string;
   id?: string;
   teacherId: string;
-  subject: string;
+  subject: Subject;
   grade: string;
   topic: string;
   difficulty: Difficulty;
@@ -34,14 +37,13 @@ export interface QuestionDTO {
 }
 
 export interface ExamDTO {
-  _id?: string;
-  id?: string;
+  _id: string;
   teacherId: string;
   title: string;
-  subject: string;
+  subject: Subject;
   grade: string;
-  topic: string;
-  mode?: "MIXED" | "MCQ" | "DISC";
+  topics: string[];
+  mode: ExamMode;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -49,23 +51,46 @@ export interface ExamDTO {
 export interface ComposeExamRequest {
   teacherId: string;
   title: string;
-  subject: string;
+  subject: Subject;
   grade: string;
   topics: string[];
   count: number;
-  mode?: "MIXED" | "MCQ" | "DISC";
+  mode?: ExamMode;
 }
 
-export interface ComposeExamResponse {
-  exam: unknown;
-  questions: QuestionDTO[];
+export type RenderedQuestion =
+  | {
+      id: string;
+      type: "MCQ";
+      statement: string;
+      topic: string;
+      difficulty: Difficulty;
+      options: string[];
+      answerKey?: number;
+    }
+  | {
+      id: string;
+      type: "DISC";
+      statement: string;
+      topic: string;
+      difficulty: Difficulty;
+      expectedAnswer?: string;
+      rubric?: string;
+    };
+
+export interface RenderExamResponse {
+  exam: {
+    id: string;
+    title: string;
+    subject: Subject;
+    grade: string;
+    topics: string[];
+    version: ExamVersion;
+  };
+  questions: RenderedQuestion[];
 }
 
 type ApiErrorBody = { error?: unknown };
-type TopicsResponse = { topics: unknown };
-type MeResponse = { user: AuthUser };
-type ComposeResponse = { exam: unknown; questions: unknown };
-type ListExamsResponse = { exams: unknown };
 
 function authHeaders(token?: string | null): HeadersInit {
   const headers: Record<string, string> = {};
@@ -80,6 +105,34 @@ async function parseError(res: Response, fallback: string): Promise<string> {
     if (typeof err === "string" && err.trim()) return err;
   }
   return fallback;
+}
+
+export async function apiRegister(input: {
+  name: string;
+  email: string;
+  password: string;
+  role: "TEACHER" | "STUDENT";
+}): Promise<AuthResponse> {
+  const res = await fetch(`${API_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+
+  if (!res.ok) throw new Error(await parseError(res, `REGISTER_FAILED_${res.status}`));
+
+  const data: unknown = await res.json();
+  if (
+    typeof data === "object" &&
+    data &&
+    "token" in data &&
+    typeof (data as { token: unknown }).token === "string" &&
+    "user" in data
+  ) {
+    return data as AuthResponse;
+  }
+
+  throw new Error("REGISTER_INVALID_RESPONSE");
 }
 
 export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
@@ -105,7 +158,7 @@ export async function apiLogin(email: string, password: string): Promise<AuthRes
   throw new Error("LOGIN_INVALID_RESPONSE");
 }
 
-export async function apiMe(token: string): Promise<MeResponse> {
+export async function apiMe(token: string): Promise<{ user: AuthUser }> {
   const res = await fetch(`${API_URL}/auth/me`, {
     method: "GET",
     headers: authHeaders(token)
@@ -114,12 +167,12 @@ export async function apiMe(token: string): Promise<MeResponse> {
   if (!res.ok) throw new Error(await parseError(res, `ME_FAILED_${res.status}`));
 
   const data: unknown = await res.json();
-  if (typeof data === "object" && data && "user" in data) return data as MeResponse;
+  if (typeof data === "object" && data && "user" in data) return data as { user: AuthUser };
 
   throw new Error("ME_INVALID_RESPONSE");
 }
 
-export async function getTopics(params: { token: string; subject: string; grade: string }): Promise<string[]> {
+export async function getTopics(params: { token: string; subject: Subject; grade: string }): Promise<string[]> {
   const qs = new URLSearchParams({ subject: params.subject, grade: params.grade }).toString();
 
   const res = await fetch(`${API_URL}/questions/topics?${qs}`, {
@@ -131,17 +184,16 @@ export async function getTopics(params: { token: string; subject: string; grade:
 
   const data: unknown = await res.json();
   if (typeof data === "object" && data && "topics" in data) {
-    const topics = (data as TopicsResponse).topics;
-    if (Array.isArray(topics) && topics.every((t) => typeof t === "string")) return topics;
+    const topics = (data as { topics: unknown }).topics;
+    if (Array.isArray(topics) && topics.every((t) => typeof t === "string")) {
+      return (topics as string[]).map((t) => t.trim()).filter(Boolean).sort((a, b) => a.localeCompare(b));
+    }
   }
 
   return [];
 }
 
-export async function composeExam(params: {
-  token: string;
-  payload: ComposeExamRequest;
-}): Promise<ComposeExamResponse> {
+export async function composeExam(params: { token: string; payload: ComposeExamRequest }): Promise<{ exam: ExamDTO }> {
   const res = await fetch(`${API_URL}/exams/compose`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(params.token) },
@@ -151,18 +203,15 @@ export async function composeExam(params: {
   if (!res.ok) throw new Error(await parseError(res, `COMPOSE_FAILED_${res.status}`));
 
   const data: unknown = await res.json();
-  if (typeof data === "object" && data && "exam" in data && "questions" in data) {
-    const questions = (data as ComposeResponse).questions;
-    if (Array.isArray(questions)) {
-      return { exam: (data as ComposeResponse).exam, questions: questions as QuestionDTO[] };
-    }
+  if (typeof data === "object" && data && "exam" in data) {
+    return { exam: (data as { exam: ExamDTO }).exam };
   }
 
   throw new Error("COMPOSE_INVALID_RESPONSE");
 }
 
-export async function listExams(params: { token: string; teacherId?: string }): Promise<ExamDTO[]> {
-  const qs = params.teacherId ? `?${new URLSearchParams({ teacherId: params.teacherId }).toString()}` : "";
+export async function listExams(params: { token: string; teacherId: string }): Promise<ExamDTO[]> {
+  const qs = `?${new URLSearchParams({ teacherId: params.teacherId }).toString()}`;
 
   const res = await fetch(`${API_URL}/exams${qs}`, {
     method: "GET",
@@ -173,7 +222,7 @@ export async function listExams(params: { token: string; teacherId?: string }): 
 
   const data: unknown = await res.json();
   if (typeof data === "object" && data && "exams" in data) {
-    const exams = (data as ListExamsResponse).exams;
+    const exams = (data as { exams: unknown }).exams;
     if (Array.isArray(exams)) return exams as ExamDTO[];
   }
 
@@ -190,47 +239,25 @@ export async function deleteExam(params: { token: string; examId: string }): Pro
   if (!res.ok) throw new Error(await parseError(res, `DELETE_EXAM_FAILED_${res.status}`));
 }
 
-export function renderExam(input: {
-  title: string;
-  subject?: string;
-  grade?: string;
-  topics?: string[];
-  questions: QuestionDTO[];
-}): string {
-  const headerLines: string[] = [];
-  headerLines.push(input.title);
+export async function renderExam(params: {
+  token: string;
+  examId: string;
+  version: ExamVersion;
+  audience: RenderAudience;
+}): Promise<RenderExamResponse> {
+  const qs = new URLSearchParams({ version: params.version, audience: params.audience }).toString();
 
-  const meta: string[] = [];
-  if (input.subject) meta.push(`Disciplina: ${input.subject}`);
-  if (input.grade) meta.push(`Série/Ano: ${input.grade}`);
-  if (input.topics?.length) meta.push(`Tópicos: ${input.topics.join(", ")}`);
-  if (meta.length) headerLines.push(meta.join(" | "));
-
-  headerLines.push("");
-  headerLines.push("INSTRUÇÕES:");
-  headerLines.push("- Responda com atenção.");
-  headerLines.push("");
-
-  const body: string[] = input.questions.map((q, idx) => {
-    const n = idx + 1;
-    const lines: string[] = [];
-    lines.push(`${n}) ${q.statement}`);
-
-    if (q.type === "MCQ" && Array.isArray(q.options) && q.options.length) {
-      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-      q.options.forEach((opt, i) => {
-        const letter = letters[i] ?? "?";
-        lines.push(`   ${letter}) ${opt}`);
-      });
-    } else {
-      lines.push("");
-      lines.push("   _____________________________________________");
-      lines.push("   _____________________________________________");
-      lines.push("   _____________________________________________");
-    }
-
-    return lines.join("\n");
+  const res = await fetch(`${API_URL}/exams/${params.examId}/render?${qs}`, {
+    method: "GET",
+    headers: authHeaders(params.token)
   });
 
-  return [...headerLines, ...body].join("\n");
+  if (!res.ok) throw new Error(await parseError(res, `RENDER_FAILED_${res.status}`));
+
+  const data: unknown = await res.json();
+  if (typeof data === "object" && data && "exam" in data && "questions" in data) {
+    return data as RenderExamResponse;
+  }
+
+  throw new Error("RENDER_INVALID_RESPONSE");
 }

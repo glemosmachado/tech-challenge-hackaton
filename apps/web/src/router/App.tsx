@@ -2,24 +2,26 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import type { ReactElement } from "react";
 import { useAuth } from "../auth/useAuth";
 import LoginPage from "../screens/LoginPage";
+import RegisterPage from "../screens/RegisterPage";
 import TeacherHome from "../screens/TeacherHome";
 import StudentHome from "../screens/StudentHome";
 
 function RequireRole({ role, children }: { role: "TEACHER" | "STUDENT"; children: ReactElement }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div style={{ padding: 24 }}>Carregando...</div>;
+  const { user, isBootstrapping } = useAuth();
+  if (isBootstrapping) return <div style={{ padding: 24 }}>Carregando...</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== role) return <Navigate to={user.role === "TEACHER" ? "/teacher" : "/student"} replace />;
   return children;
 }
 
 export default function App() {
-  const { user, loading } = useAuth();
-  if (loading) return <div style={{ padding: 24 }}>Carregando...</div>;
+  const { user, isBootstrapping } = useAuth();
+  if (isBootstrapping) return <div style={{ padding: 24 }}>Carregando...</div>;
 
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
 
       <Route
         path="/teacher"
@@ -41,7 +43,9 @@ export default function App() {
 
       <Route
         path="/"
-        element={user ? <Navigate to={user.role === "TEACHER" ? "/teacher" : "/student"} replace /> : <Navigate to="/login" replace />}
+        element={
+          user ? <Navigate to={user.role === "TEACHER" ? "/teacher" : "/student"} replace /> : <Navigate to="/login" replace />
+        }
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />

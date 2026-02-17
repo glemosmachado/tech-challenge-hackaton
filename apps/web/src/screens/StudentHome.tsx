@@ -1,28 +1,28 @@
 import { useState } from "react";
 import { useAuth } from "../auth/useAuth";
-import { renderExam, type RenderExamResponse } from "../lib/api";
+import { renderExam, type ExamVersion, type RenderExamResponse } from "../lib/api";
 
-function getErrorMessage(err: unknown) {
-  if (err instanceof Error) return err.message;
-  return "Erro ao abrir prova";
+function msg(e: unknown) {
+  return e instanceof Error ? e.message : "OPEN_FAILED";
 }
 
 export default function StudentHome() {
-  const { user, signOut } = useAuth();
+  const { user, token, signOut } = useAuth();
 
   const [examId, setExamId] = useState("");
-  const [version, setVersion] = useState<"A" | "B">("A");
-  const [err, setErr] = useState("");
+  const [version, setVersion] = useState<ExamVersion>("A");
+  const [error, setError] = useState("");
   const [rendered, setRendered] = useState<RenderExamResponse | null>(null);
 
   async function onOpen() {
-    setErr("");
+    if (!token) return;
+    setError("");
     setRendered(null);
     try {
-      const data = await renderExam(examId.trim(), version, "student");
+      const data = await renderExam({ token, examId: examId.trim(), version, audience: "student" });
       setRendered(data);
     } catch (e) {
-      setErr(getErrorMessage(e));
+      setError(msg(e));
     }
   }
 
@@ -36,11 +36,7 @@ export default function StudentHome() {
         </div>
       </div>
 
-      {err ? (
-        <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 12, marginBottom: 16 }}>
-          {err}
-        </div>
-      ) : null}
+      {error ? <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 12, marginBottom: 16 }}>{error}</div> : null}
 
       <section style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8, marginBottom: 16 }}>
         <h2>Abrir prova</h2>
@@ -53,7 +49,7 @@ export default function StudentHome() {
 
           <label>
             Versão
-            <select value={version} onChange={(e) => setVersion(e.target.value as "A" | "B")} style={{ display: "block", width: 120 }}>
+            <select value={version} onChange={(e) => setVersion(e.target.value as ExamVersion)} style={{ display: "block", width: 120 }}>
               <option value="A">A</option>
               <option value="B">B</option>
             </select>
@@ -67,9 +63,7 @@ export default function StudentHome() {
 
       {rendered ? (
         <section style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8 }}>
-          <h2>
-            {rendered.exam.title} (Versão {rendered.exam.version})
-          </h2>
+          <h2>{rendered.exam.title} (Versão {rendered.exam.version})</h2>
 
           <ol>
             {rendered.questions.map((q) => (
