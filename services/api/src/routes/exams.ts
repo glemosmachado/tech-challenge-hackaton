@@ -18,8 +18,18 @@ function isNonEmptyString(x: unknown): x is string {
   return typeof x === "string" && x.trim().length > 0;
 }
 
+function pickTeacherId(req: any, bodyTeacherId: unknown): string {
+  if (isNonEmptyString(bodyTeacherId)) return bodyTeacherId.trim();
+  const sub = req?.user?.sub;
+  if (isNonEmptyString(sub)) return sub.trim();
+  const id = req?.user?.id;
+  if (isNonEmptyString(id)) return id.trim();
+  return "";
+}
+
 router.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const { teacherId, title, subject, grade, topics, count, mode } = req.body ?? {};
+  const { teacherId: bodyTeacherId, title, subject, grade, topics, count, mode } = req.body ?? {};
+  const teacherId = pickTeacherId(req, bodyTeacherId);
 
   if (
     !isNonEmptyString(teacherId) ||
@@ -34,15 +44,15 @@ router.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) =>
   ) {
     return res.status(400).json({
       error: "VALIDATION_ERROR",
-      required: ["teacherId", "title", "subject", "grade", "topics[]", "count"]
+      required: ["title", "subject", "grade", "topics[]", "count"]
     });
   }
 
   const qFilter: Record<string, unknown> = {
     teacherId,
-    subject,
-    grade,
-    topic: { $in: topics }
+    subject: subject.trim(),
+    grade: grade.trim(),
+    topic: { $in: topics.map((t: string) => t.trim()) }
   };
 
   if (mode === "MCQ") qFilter.type = "MCQ";
@@ -51,6 +61,7 @@ router.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) =>
   const all = await QuestionModel.find(qFilter).lean();
 
   if (!all.length) return res.status(404).json({ error: "NO_QUESTIONS_FOUND" });
+
   const requested = Number(count);
   if (all.length < requested) {
     return res.status(400).json({ error: "INSUFFICIENT_QUESTIONS", available: all.length, requested });
@@ -64,10 +75,10 @@ router.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) =>
 
   const exam = await ExamModel.create({
     teacherId,
-    title,
-    subject,
-    grade,
-    topics,
+    title: title.trim(),
+    subject: subject.trim(),
+    grade: grade.trim(),
+    topics: topics.map((t: string) => t.trim()),
     questionIds: ids,
     versions: [
       { version: "A", questionOrder: versionA },
@@ -80,7 +91,7 @@ router.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) =>
 });
 
 router.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const teacherId = (req.query.teacherId as string | undefined)?.trim() ?? "";
+  const teacherId = (req.query.teacherId as string | undefined)?.trim() ?? pickTeacherId(req, undefined);
   if (!teacherId) return res.status(400).json({ error: "MISSING_QUERY", required: ["teacherId"] });
 
   const exams = await ExamModel.find({ teacherId }).sort({ createdAt: -1 }).lean();
@@ -88,7 +99,7 @@ router.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
 });
 
 router.delete("/:id", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const teacherId = req.user?.sub;
+  const teacherId = pickTeacherId(req, undefined);
   const id = req.params.id;
 
   const deleted = await ExamModel.findOneAndDelete({ _id: id, teacherId });
