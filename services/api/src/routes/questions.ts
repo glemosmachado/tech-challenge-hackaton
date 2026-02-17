@@ -1,5 +1,5 @@
 import { Router } from "express";
-import Question from "../models/question.js";
+import QuestionModel from "../models/question.js";
 import { requireAuth, requireRole } from "../middlewares/auth.js";
 
 const router = Router();
@@ -9,42 +9,26 @@ router.get("/topics", requireAuth, requireRole("TEACHER"), async (req, res) => {
   const grade = (req.query.grade as string | undefined)?.trim() ?? "";
 
   if (!subject || !grade) {
-    return res.status(400).json({ message: "subject and grade are required" });
+    return res.status(400).json({ error: "MISSING_QUERY", required: ["subject", "grade"] });
   }
 
-  const topics = await Question.distinct("topic", {
-    subject,
-    grade,
-    topic: { $ne: "" }
-  });
-
-  const items = topics
-    .map((t) => String(t))
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0)
-    .sort((a, b) => a.localeCompare(b));
-
-  return res.json({ items });
+  const topics = await QuestionModel.distinct("topic", { subject, grade });
+  return res.json({ topics });
 });
 
 router.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const subject = (req.query.subject as string | undefined)?.trim() ?? "";
-  const grade = (req.query.grade as string | undefined)?.trim() ?? "";
-  const topic = (req.query.topic as string | undefined)?.trim() ?? "";
-  const difficulty = (req.query.difficulty as string | undefined)?.trim() ?? "";
-  const type = (req.query.type as string | undefined)?.trim() ?? "";
+  const subject = (req.query.subject as string | undefined)?.trim();
+  const grade = (req.query.grade as string | undefined)?.trim();
+  const topic = (req.query.topic as string | undefined)?.trim();
 
-  const filter: Record<string, unknown> = {};
-  if (subject) filter.subject = subject;
-  if (grade) filter.grade = grade;
-  if (topic) filter.topic = topic;
-  if (difficulty) filter.difficulty = difficulty;
-  if (type) filter.type = type;
+  const query: Record<string, unknown> = {};
+  if (subject) query.subject = subject;
+  if (grade) query.grade = grade;
+  if (topic) query.topic = topic;
 
-  const items = await Question.find(filter).sort({ createdAt: -1 }).limit(500);
-  const total = await Question.countDocuments(filter);
+  const docs = await QuestionModel.find(query).sort({ createdAt: -1 }).lean();
 
-  return res.json({ total, items });
+  return res.json({ questions: docs });
 });
 
 router.post("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
@@ -62,27 +46,15 @@ router.post("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
     rubric
   } = req.body ?? {};
 
-  if (!subject || !grade || !topic || !difficulty || !type || !statement) {
-    return res.status(400).json({ message: "missing required fields" });
+  if (!teacherId || !subject || !grade || !topic || !difficulty || !type || !statement) {
+    return res.status(400).json({
+      error: "VALIDATION_ERROR",
+      required: ["teacherId", "subject", "grade", "topic", "difficulty", "type", "statement"]
+    });
   }
 
-  if (type === "MCQ") {
-    if (!Array.isArray(options) || options.length < 2) {
-      return res.status(400).json({ message: "MCQ options must be an array with at least 2 items" });
-    }
-    if (typeof correctIndex !== "number" || correctIndex < 0 || correctIndex >= options.length) {
-      return res.status(400).json({ message: "MCQ correctIndex is invalid" });
-    }
-  }
-
-  if (type === "DISC") {
-    if (typeof expectedAnswer !== "string" || expectedAnswer.trim().length === 0) {
-      return res.status(400).json({ message: "DISC expectedAnswer is required" });
-    }
-  }
-
-  const doc = await Question.create({
-    teacherId: teacherId ?? "demo-teacher",
+  const doc = await QuestionModel.create({
+    teacherId,
     subject,
     grade,
     topic,
@@ -98,4 +70,5 @@ router.post("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
   return res.status(201).json(doc);
 });
 
+export const questionsRouter = router;
 export default router;

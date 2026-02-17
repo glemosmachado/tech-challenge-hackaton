@@ -1,9 +1,9 @@
 import express from "express";
 import cors from "cors";
-import { healthRouter } from "./routes/health";
-import { questionsRouter } from "./routes/questions";
-import { examsRouter } from "./routes/exams";
-import { authRouter } from "./routes/auth";
+import { healthRouter } from "./routes/health.js";
+import { questionsRouter } from "./routes/questions.js";
+import { examsRouter } from "./routes/exams.js";
+import { authRouter } from "./routes/auth.js";
 
 export function createApp() {
   const app = express();

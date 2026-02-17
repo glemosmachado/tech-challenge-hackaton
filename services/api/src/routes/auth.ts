@@ -1,9 +1,9 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
-import { UserModel } from "../models/user";
-import { loginSchema, registerSchema } from "../schemas/auth.schema";
-import { signToken } from "../utils/jwt";
-import { requireAuth } from "../middlewares/auth";
+import { UserModel } from "../models/user.js";
+import { loginSchema, registerSchema } from "../schemas/auth.schema.js";
+import { signToken } from "../utils/jwt.js";
+import { requireAuth } from "../middlewares/auth.js";
 
 export const authRouter = Router();
 

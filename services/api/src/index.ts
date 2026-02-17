@@ -1,24 +1,14 @@
 import "dotenv/config";
-import { createApp } from "./app";
-import { connectDb } from "./db";
+import { createApp } from "./app.js";
+import { connectDb } from "./db.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
 async function bootstrap() {
-  const mongodbUri = process.env.MONGODB_URI;
-  if (!mongodbUri) {
-    throw new Error("Missing env var: MONGODB_URI");
-  }
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("Missing env var: MONGODB_URI");
 
-  const conn = await connectDb(mongodbUri);
-
-  conn.on("connected", () => {
-    console.log("[db] connected");
-  });
-
-  conn.on("error", (err) => {
-    console.error("[db] error", err);
-  });
+  await connectDb(uri);
 
   const app = createApp();
 

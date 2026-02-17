@@ -1,4 +1,4 @@
-import { Schema, model, models } from "mongoose";
+import { Schema, model, models, type Model } from "mongoose";
 
 export type Subject = "physics" | "geography";
 export type QuestionType = "MCQ" | "DISC";
@@ -49,6 +49,7 @@ questionSchema.index(
   { unique: true }
 );
 
-export const QuestionModel = models.Question || model<Question>("Question", questionSchema);
+export const QuestionModel: Model<Question> =
+  (models.Question as Model<Question>) || model<Question>("Question", questionSchema);
 
 export default QuestionModel;

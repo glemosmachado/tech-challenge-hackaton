@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { verifyToken, type JwtPayload } from "../utils/jwt";
+import { verifyToken, type JwtPayload } from "../utils/jwt.js";
 
 export type AuthUser = JwtPayload;
 

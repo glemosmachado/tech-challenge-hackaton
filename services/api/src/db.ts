@@ -1,13 +1,7 @@
 import mongoose from "mongoose";
 
-export async function connectDb(mongodbUri: string) {
+export async function connectDb(uri: string) {
   mongoose.set("strictQuery", true);
-
-  console.log("[db] connecting to:", mongodbUri.split("@")[1]);
-
-  await mongoose.connect(mongodbUri);
-
-  console.log("[db] connected successfully");
-
+  await mongoose.connect(uri);
   return mongoose.connection;
 }
