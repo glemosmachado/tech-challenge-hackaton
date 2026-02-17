@@ -1,16 +1,18 @@
 import { createContext } from "react";
-import type { AuthUser, UserRole } from "../lib/api";
+import type { AuthUser } from "../lib/api";
 
-export type AuthState = {
-  token: string | null;
+export type AuthContextValue = {
   user: AuthUser | null;
-  loading: boolean;
+  token: string | null;
+  isBootstrapping: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
 };
 
-export type AuthCtx = AuthState & {
-  signIn(email: string, password: string): Promise<UserRole>;
-  signOut(): void;
-  refresh(): Promise<void>;
-};
-
-export const AuthContext = createContext<AuthCtx | null>(null);
+export const AuthContext = createContext<AuthContextValue>({
+  user: null,
+  token: null,
+  isBootstrapping: true,
+  login: async () => {},
+  logout: () => {}
+});
