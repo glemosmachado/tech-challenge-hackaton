@@ -20,22 +20,6 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
-export interface QuestionDTO {
-  _id?: string;
-  id?: string;
-  teacherId: string;
-  subject: Subject;
-  grade: string;
-  topic: string;
-  difficulty: Difficulty;
-  type: QuestionType;
-  statement: string;
-  options?: string[];
-  correctIndex?: number;
-  expectedAnswer?: string;
-  rubric?: string;
-}
-
 export interface ExamDTO {
   _id: string;
   teacherId: string;
@@ -49,7 +33,7 @@ export interface ExamDTO {
 }
 
 export interface ComposeExamRequest {
-  teacherId: string;
+  teacherId?: string;
   title: string;
   subject: Subject;
   grade: string;
@@ -107,6 +91,19 @@ async function parseError(res: Response, fallback: string): Promise<string> {
   return fallback;
 }
 
+export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+
+  if (!res.ok) throw new Error(await parseError(res, `LOGIN_FAILED_${res.status}`));
+
+  const data: unknown = await res.json();
+  return data as AuthResponse;
+}
+
 export async function apiRegister(input: {
   name: string;
   email: string;
@@ -122,40 +119,7 @@ export async function apiRegister(input: {
   if (!res.ok) throw new Error(await parseError(res, `REGISTER_FAILED_${res.status}`));
 
   const data: unknown = await res.json();
-  if (
-    typeof data === "object" &&
-    data &&
-    "token" in data &&
-    typeof (data as { token: unknown }).token === "string" &&
-    "user" in data
-  ) {
-    return data as AuthResponse;
-  }
-
-  throw new Error("REGISTER_INVALID_RESPONSE");
-}
-
-export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
-  const res = await fetch(`${API_URL}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-
-  if (!res.ok) throw new Error(await parseError(res, `LOGIN_FAILED_${res.status}`));
-
-  const data: unknown = await res.json();
-  if (
-    typeof data === "object" &&
-    data &&
-    "token" in data &&
-    typeof (data as { token: unknown }).token === "string" &&
-    "user" in data
-  ) {
-    return data as AuthResponse;
-  }
-
-  throw new Error("LOGIN_INVALID_RESPONSE");
+  return data as AuthResponse;
 }
 
 export async function apiMe(token: string): Promise<{ user: AuthUser }> {
@@ -167,9 +131,7 @@ export async function apiMe(token: string): Promise<{ user: AuthUser }> {
   if (!res.ok) throw new Error(await parseError(res, `ME_FAILED_${res.status}`));
 
   const data: unknown = await res.json();
-  if (typeof data === "object" && data && "user" in data) return data as { user: AuthUser };
-
-  throw new Error("ME_INVALID_RESPONSE");
+  return data as { user: AuthUser };
 }
 
 export async function getTopics(params: { token: string; subject: Subject; grade: string }): Promise<string[]> {
@@ -210,10 +172,8 @@ export async function composeExam(params: { token: string; payload: ComposeExamR
   throw new Error("COMPOSE_INVALID_RESPONSE");
 }
 
-export async function listExams(params: { token: string; teacherId: string }): Promise<ExamDTO[]> {
-  const qs = `?${new URLSearchParams({ teacherId: params.teacherId }).toString()}`;
-
-  const res = await fetch(`${API_URL}/exams${qs}`, {
+export async function listExams(params: { token: string }): Promise<ExamDTO[]> {
+  const res = await fetch(`${API_URL}/exams`, {
     method: "GET",
     headers: authHeaders(params.token)
   });
@@ -255,9 +215,5 @@ export async function renderExam(params: {
   if (!res.ok) throw new Error(await parseError(res, `RENDER_FAILED_${res.status}`));
 
   const data: unknown = await res.json();
-  if (typeof data === "object" && data && "exam" in data && "questions" in data) {
-    return data as RenderExamResponse;
-  }
-
-  throw new Error("RENDER_INVALID_RESPONSE");
+  return data as RenderExamResponse;
 }

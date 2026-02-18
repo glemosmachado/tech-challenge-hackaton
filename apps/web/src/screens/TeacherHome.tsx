@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/useAuth";
+import { useNavigate } from "react-router-dom";
 import {
   composeExam,
   deleteExam,
@@ -17,7 +18,10 @@ function msg(e: unknown, fallback: string) {
   return e instanceof Error ? e.message : fallback;
 }
 
+const GRADE_OPTIONS = ["1ano", "2ano", "3ano", "4ano", "5ano", "6ano", "7ano", "8ano", "9ano"] as const;
+
 export default function TeacherHome() {
+  const navigate = useNavigate();
   const { user, token, signOut } = useAuth();
 
   const [error, setError] = useState("");
@@ -25,7 +29,7 @@ export default function TeacherHome() {
 
   const [title, setTitle] = useState("Prova");
   const [subject, setSubject] = useState<Subject>("physics");
-  const [grade, setGrade] = useState("1ano");
+  const [grade, setGrade] = useState<(typeof GRADE_OPTIONS)[number]>("1ano");
   const [mode, setMode] = useState<ExamMode>("MIXED");
   const [count, setCount] = useState(3);
 
@@ -37,14 +41,14 @@ export default function TeacherHome() {
   const [examId, setExamId] = useState("");
   const [rendered, setRendered] = useState<RenderExamResponse | null>(null);
 
-  const canCompose = !!token && !!user && selectedTopics.length > 0 && Number.isFinite(count) && count > 0;
+  const canCompose = !!token && selectedTopics.length > 0 && Number.isFinite(count) && count > 0;
 
   async function refresh() {
-    if (!token || !user) return;
+    if (!token) return;
     setError("");
     setLoadingList(true);
     try {
-      const items = await listExams({ token, teacherId: user.id });
+      const items = await listExams({ token });
       setExams(items);
     } catch (e) {
       setError(msg(e, "LIST_EXAMS_FAILED"));
@@ -72,7 +76,7 @@ export default function TeacherHome() {
 
   useEffect(() => {
     refresh();
-  }, [token, user?.id]);
+  }, [token]);
 
   useEffect(() => {
     loadTopics();
@@ -83,13 +87,12 @@ export default function TeacherHome() {
   }
 
   async function onCompose() {
-    if (!token || !user) return;
+    if (!token) return;
     setError("");
     try {
       const created = await composeExam({
         token,
         payload: {
-          teacherId: user.id,
           title,
           subject,
           grade,
@@ -101,6 +104,7 @@ export default function TeacherHome() {
       setExamId(created.exam._id);
       setRendered(null);
       await refresh();
+      navigate(`/teacher/exams/${created.exam._id}`);
     } catch (e) {
       setError(msg(e, "COMPOSE_FAILED"));
     }
@@ -134,13 +138,13 @@ export default function TeacherHome() {
   }
 
   const topicsUi = useMemo(() => {
-    if (topicsLoading) return <div>Carregando topics...</div>;
-    if (!topics.length) return <div>Nenhum topic para esse filtro.</div>;
+    if (topicsLoading) return <div className="card-meta">Carregando topics...</div>;
+    if (!topics.length) return <div className="card-meta">Nenhum topic para esse filtro.</div>;
 
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8, marginTop: 8 }}>
+      <div className="topics">
         {topics.map((t) => (
-          <label key={t} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <label key={t} className="topic-item">
             <input type="checkbox" checked={selectedTopics.includes(t)} onChange={() => toggleTopic(t)} />
             <span>{t}</span>
           </label>
@@ -150,90 +154,122 @@ export default function TeacherHome() {
   }, [topics, topicsLoading, selectedTopics]);
 
   return (
-    <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-        <h1>Professor</h1>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <span style={{ opacity: 0.8 }}>{user?.name}</span>
-          <button onClick={signOut}>Sair</button>
+    <div className="container">
+      <div className="topbar">
+        <div className="brand">
+          <h1>Professor</h1>
+          <div className="subtitle">Composição, versões A/B e gabarito</div>
+        </div>
+
+        <div className="userbar">
+          <span>{user?.name}</span>
+          <button className="btn btn-ghost" onClick={signOut}>
+            Sair
+          </button>
         </div>
       </div>
 
-      {error ? <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 12, marginBottom: 16 }}>{error}</div> : null}
+      {error ? <div className="alert error">{error}</div> : null}
 
-      <section style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8, marginBottom: 16 }}>
-        <h2>Compor prova</h2>
+      <section className="card">
+        <div className="card-header">
+          <h2 className="card-title">Compor prova</h2>
+          <span className="pill">Selecionados: {selectedTopics.length}</span>
+        </div>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <label>
-            Título
-            <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ display: "block", width: 280 }} />
-          </label>
+        <div className="form-grid">
+          <div className="field" style={{ gridColumn: "span 12" }}>
+            <span className="label">Título</span>
+            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
 
-          <label>
-            Disciplina
-            <select value={subject} onChange={(e) => setSubject(e.target.value as Subject)} style={{ display: "block", width: 180 }}>
+          <div className="field" style={{ gridColumn: "span 12 / span 4" }}>
+            <span className="label">Disciplina</span>
+            <select className="select" value={subject} onChange={(e) => setSubject(e.target.value as Subject)}>
               <option value="physics">physics</option>
               <option value="geography">geography</option>
             </select>
-          </label>
+          </div>
 
-          <label>
-            Série
-            <input value={grade} onChange={(e) => setGrade(e.target.value)} style={{ display: "block", width: 140 }} />
-          </label>
+          <div className="field" style={{ gridColumn: "span 12 / span 3" }}>
+            <span className="label">Série</span>
+            <select className="select" value={grade} onChange={(e) => setGrade(e.target.value as (typeof GRADE_OPTIONS)[number])}>
+              {GRADE_OPTIONS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <label>
-            Tipo
-            <select value={mode} onChange={(e) => setMode(e.target.value as ExamMode)} style={{ display: "block", width: 140 }}>
+          <div className="field" style={{ gridColumn: "span 12 / span 3" }}>
+            <span className="label">Tipo</span>
+            <select className="select" value={mode} onChange={(e) => setMode(e.target.value as ExamMode)}>
               <option value="MIXED">MIXED</option>
               <option value="MCQ">MCQ</option>
               <option value="DISC">DISC</option>
             </select>
-          </label>
+          </div>
 
-          <label>
-            Quantidade
-            <input type="number" min={1} value={count} onChange={(e) => setCount(Number(e.target.value))} style={{ display: "block", width: 120 }} />
-          </label>
+          <div className="field" style={{ gridColumn: "span 12 / span 2" }}>
+            <span className="label">Quantidade</span>
+            <input className="input" type="number" min={1} value={count} onChange={(e) => setCount(Number(e.target.value))} />
+          </div>
 
-          <button onClick={onCompose} disabled={!canCompose} style={{ height: 40, alignSelf: "end" }}>
-            Compor
-          </button>
+          <div style={{ gridColumn: "span 12", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={onCompose} disabled={!canCompose}>
+              Compor e abrir
+            </button>
 
-          <button onClick={refresh} disabled={loadingList} style={{ height: 40, alignSelf: "end" }}>
-            {loadingList ? "Carregando..." : "Atualizar lista"}
-          </button>
+            <button className="btn btn-ghost" onClick={refresh} disabled={loadingList}>
+              {loadingList ? "Carregando..." : "Atualizar lista"}
+            </button>
+          </div>
         </div>
 
-        <div style={{ marginTop: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-            <strong>Topics</strong>
-            <span style={{ opacity: 0.8 }}>Selecionados: {selectedTopics.length}</span>
+        <div style={{ marginTop: 14 }}>
+          <div className="split">
+            <div className="card-meta">Topics disponíveis para o filtro selecionado</div>
+            {topicsLoading ? <span className="kbd">loading</span> : <span className="kbd">{topics.length} topics</span>}
           </div>
           {topicsUi}
         </div>
       </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8 }}>
-          <h2>Minhas provas</h2>
-          <div style={{ opacity: 0.8, marginBottom: 8 }}>Total: {exams.length}</div>
+      <section className="grid-2" style={{ marginTop: 16 }}>
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">Minhas provas</h2>
+            <div className="card-meta">Total: {exams.length}</div>
+          </div>
 
-          <ul style={{ paddingLeft: 18 }}>
+          <ul className="list">
             {exams.map((ex) => (
-              <li key={ex._id} style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <li key={ex._id} className="list-item">
+                <div className="exam-row">
                   <div>
-                    <div style={{ fontWeight: 600 }}>{ex.title}</div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>{ex.subject} | {ex.grade} | {ex.topics.join(", ")}</div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}><code>{ex._id}</code></div>
+                    <button className="btn btn-ghost" style={{ height: 34, padding: "0 10px" }} onClick={() => navigate(`/teacher/exams/${ex._id}`)}>
+                      Abrir
+                    </button>
+                    <div className="exam-title" style={{ marginTop: 8 }}>{ex.title}</div>
+                    <div className="exam-sub">
+                      {ex.subject} | {ex.grade} | {ex.topics.join(", ")}
+                    </div>
+                    <div className="exam-id">
+                      <span className="kbd">{ex._id}</span>
+                    </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: 8, alignItems: "start", flexWrap: "wrap" }}>
-                    <button onClick={() => onRender(ex._id, "A")}>A</button>
-                    <button onClick={() => onRender(ex._id, "B")}>B</button>
-                    <button onClick={() => onDelete(ex._id)}>Deletar</button>
+                  <div className="actions">
+                    <button className="btn btn-ghost" onClick={() => onRender(ex._id, "A")}>
+                      A
+                    </button>
+                    <button className="btn btn-ghost" onClick={() => onRender(ex._id, "B")}>
+                      B
+                    </button>
+                    <button className="btn btn-danger" onClick={() => onDelete(ex._id)}>
+                      Deletar
+                    </button>
                   </div>
                 </div>
               </li>
@@ -241,44 +277,41 @@ export default function TeacherHome() {
           </ul>
         </div>
 
-        <div style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8 }}>
-          <h2>Visualização (gabarito)</h2>
-          <div style={{ marginBottom: 8 }}>ExamId: <code>{examId || "-"}</code></div>
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">Prévia rápida</h2>
+            <div className="card-meta">
+              ExamId: {examId ? <span className="kbd">{examId}</span> : <span className="kbd">-</span>}
+            </div>
+          </div>
 
           {rendered ? (
             <div>
-              <h3>{rendered.exam.title} (Versão {rendered.exam.version})</h3>
+              <div style={{ marginBottom: 10 }}>
+                <div className="exam-title">
+                  {rendered.exam.title} (Versão {rendered.exam.version})
+                </div>
+                <div className="exam-sub">
+                  {rendered.exam.subject} | {rendered.exam.grade} | {rendered.exam.topics.join(", ")}
+                </div>
+              </div>
 
-              <ol>
-                {rendered.questions.map((q) => (
+              <ol style={{ margin: 0, paddingLeft: 18 }}>
+                {rendered.questions.slice(0, 3).map((q) => (
                   <li key={q.id} style={{ marginBottom: 12 }}>
-                    <div style={{ fontWeight: 600 }}>{q.statement}</div>
-
-                    {q.type === "MCQ" ? (
-                      <ul>
-                        {q.options.map((opt, idx) => (
-                          <li key={idx}>
-                            {opt}
-                            {"answerKey" in q && typeof q.answerKey === "number" && q.answerKey === idx ? <strong> (correta)</strong> : null}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div style={{ marginTop: 6 }}>
-                        {"expectedAnswer" in q ? (
-                          <>
-                            <div><strong>Resposta esperada:</strong> {q.expectedAnswer ?? "-"}</div>
-                            <div><strong>Rubrica:</strong> {q.rubric ?? "-"}</div>
-                          </>
-                        ) : null}
-                      </div>
-                    )}
+                    <div style={{ fontWeight: 700 }}>{q.statement}</div>
                   </li>
                 ))}
               </ol>
+
+              <div style={{ marginTop: 12 }}>
+                <button className="btn btn-primary" disabled={!examId} onClick={() => navigate(`/teacher/exams/${examId}`)}>
+                  Abrir página completa
+                </button>
+              </div>
             </div>
           ) : (
-            <div style={{ opacity: 0.75 }}>Selecione uma prova e renderize A/B.</div>
+            <div className="card-meta">Use A/B em uma prova para pré-visualizar. Para ver completo, use Abrir.</div>
           )}
         </div>
       </section>

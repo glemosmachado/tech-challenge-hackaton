@@ -1,6 +1,6 @@
 import { useState, useContext } from "react";
 import type { FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../auth/context";
 
 export default function LoginPage() {
@@ -16,37 +16,66 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
     try {
       await signIn(email, password);
       navigate("/");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "LOGIN_FAILED");
+      const message = err instanceof Error ? err.message : "LOGIN_FAILED";
+      setError(message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <form onSubmit={handleSubmit} style={{ width: 320, padding: 24, border: "1px solid #ddd", borderRadius: 8 }}>
-        <h1 style={{ marginBottom: 16 }}>Login</h1>
-
-        {error ? <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 10, marginBottom: 12 }}>{error}</div> : null}
-
-        <label style={{ display: "block", marginBottom: 6 }}>Email</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ width: "100%", padding: 8, marginBottom: 12 }} />
-
-        <label style={{ display: "block", marginBottom: 6 }}>Senha</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ width: "100%", padding: 8, marginBottom: 16 }} />
-
-        <button type="submit" disabled={loading} style={{ width: "100%", padding: 10 }}>
-          {loading ? "Entrando..." : "Entrar"}
-        </button>
-
-        <div style={{ marginTop: 12, fontSize: 14 }}>
-          Não tem conta? <Link to="/register">Criar conta</Link>
+    <div className="page-center">
+      <div className="card auth-card">
+        <div className="auth-head">
+          <h1>Acesso</h1>
+          <p>Entre com seu e-mail e senha para acessar o sistema.</p>
         </div>
-      </form>
+
+        {error ? <div className="alert error">{error}</div> : null}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-grid">
+            <div className="field" style={{ gridColumn: "span 12" }}>
+              <span className="label">Email</span>
+              <input
+                className="input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="seuemail@escola.gov.br"
+              />
+            </div>
+
+            <div className="field" style={{ gridColumn: "span 12" }}>
+              <span className="label">Senha</span>
+              <input
+                className="input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="Digite sua senha"
+              />
+            </div>
+
+            <div style={{ gridColumn: "span 12" }}>
+              <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: "100%" }}>
+                {loading ? "Entrando..." : "Entrar"}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div style={{ marginTop: 14, color: "var(--muted)", fontSize: 12 }}>
+          Dica: use o mesmo login do Postman.
+        </div>
+      </div>
     </div>
   );
 }

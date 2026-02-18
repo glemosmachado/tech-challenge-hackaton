@@ -91,8 +91,8 @@ router.post("/compose", requireAuth, requireRole("TEACHER"), async (req, res) =>
 });
 
 router.get("/", requireAuth, requireRole("TEACHER"), async (req, res) => {
-  const teacherId = (req.query.teacherId as string | undefined)?.trim() ?? pickTeacherId(req, undefined);
-  if (!teacherId) return res.status(400).json({ error: "MISSING_QUERY", required: ["teacherId"] });
+  const teacherId = pickTeacherId(req, undefined);
+  if (!teacherId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
   const exams = await ExamModel.find({ teacherId }).sort({ createdAt: -1 }).lean();
   return res.json({ exams });

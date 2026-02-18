@@ -2,9 +2,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import type { ReactElement } from "react";
 import { useAuth } from "../auth/useAuth";
 import LoginPage from "../screens/LoginPage";
-import RegisterPage from "../screens/RegisterPage";
 import TeacherHome from "../screens/TeacherHome";
 import StudentHome from "../screens/StudentHome";
+import TeacherExamPage from "../screens/TeacherExamPage";
 
 function RequireRole({ role, children }: { role: "TEACHER" | "STUDENT"; children: ReactElement }) {
   const { user, isBootstrapping } = useAuth();
@@ -21,13 +21,21 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
 
       <Route
         path="/teacher"
         element={
           <RequireRole role="TEACHER">
             <TeacherHome />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/teacher/exams/:id"
+        element={
+          <RequireRole role="TEACHER">
+            <TeacherExamPage />
           </RequireRole>
         }
       />
@@ -43,9 +51,7 @@ export default function App() {
 
       <Route
         path="/"
-        element={
-          user ? <Navigate to={user.role === "TEACHER" ? "/teacher" : "/student"} replace /> : <Navigate to="/login" replace />
-        }
+        element={user ? <Navigate to={user.role === "TEACHER" ? "/teacher" : "/student"} replace /> : <Navigate to="/login" replace />}
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />
