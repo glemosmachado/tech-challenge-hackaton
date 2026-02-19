@@ -1,6 +1,6 @@
 import { useState, useContext } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "../auth/context";
 
 export default function LoginPage() {
@@ -72,8 +72,11 @@ export default function LoginPage() {
           </div>
         </form>
 
-        <div style={{ marginTop: 14, color: "var(--muted)", fontSize: 12 }}>
-          Dica: use o mesmo login do Postman.
+        <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+          <div style={{ color: "var(--muted)", fontSize: 12 }}>Dica: use o mesmo login do Postman.</div>
+          <Link to="/register" style={{ fontSize: 12, fontWeight: 650 }}>
+            Criar conta
+          </Link>
         </div>
       </div>
     </div>

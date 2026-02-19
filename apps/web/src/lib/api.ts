@@ -74,6 +74,23 @@ export interface RenderExamResponse {
   questions: RenderedQuestion[];
 }
 
+export type QuestionDTO = {
+  _id: string;
+  teacherId: string;
+  subject: Subject;
+  grade: string;
+  topic: string;
+  difficulty: Difficulty;
+  type: QuestionType;
+  statement: string;
+  options?: string[];
+  correctIndex?: number;
+  expectedAnswer?: string;
+  rubric?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 type ApiErrorBody = { error?: unknown };
 
 function authHeaders(token?: string | null): HeadersInit {
@@ -216,4 +233,100 @@ export async function renderExam(params: {
 
   const data: unknown = await res.json();
   return data as RenderExamResponse;
+}
+
+export async function listQuestions(params: {
+  token: string;
+  subject?: Subject;
+  grade?: string;
+  topic?: string;
+  type?: QuestionType;
+  difficulty?: Difficulty;
+}): Promise<QuestionDTO[]> {
+  const qs = new URLSearchParams();
+  if (params.subject) qs.set("subject", params.subject);
+  if (params.grade) qs.set("grade", params.grade);
+  if (params.topic) qs.set("topic", params.topic);
+  if (params.type) qs.set("type", params.type);
+  if (params.difficulty) qs.set("difficulty", params.difficulty);
+
+  const res = await fetch(`${API_URL}/questions?${qs.toString()}`, {
+    method: "GET",
+    headers: authHeaders(params.token)
+  });
+
+  if (!res.ok) throw new Error(await parseError(res, `LIST_QUESTIONS_FAILED_${res.status}`));
+
+  const data: unknown = await res.json();
+  if (typeof data === "object" && data && "questions" in data) {
+    const questions = (data as { questions: unknown }).questions;
+    if (Array.isArray(questions)) return questions as QuestionDTO[];
+  }
+  return [];
+}
+
+export type CreateQuestionPayload =
+  | {
+      subject: Subject;
+      grade: string;
+      topic: string;
+      difficulty: Difficulty;
+      type: "MCQ";
+      statement: string;
+      options: string[];
+      correctIndex: number;
+    }
+  | {
+      subject: Subject;
+      grade: string;
+      topic: string;
+      difficulty: Difficulty;
+      type: "DISC";
+      statement: string;
+      expectedAnswer?: string;
+      rubric?: string;
+    };
+
+export async function createQuestion(params: { token: string; payload: CreateQuestionPayload }): Promise<QuestionDTO> {
+  const res = await fetch(`${API_URL}/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(params.token) },
+    body: JSON.stringify(params.payload)
+  });
+
+  if (!res.ok) throw new Error(await parseError(res, `CREATE_QUESTION_FAILED_${res.status}`));
+
+  const data: unknown = await res.json();
+  if (typeof data === "object" && data && "question" in data) return (data as { question: QuestionDTO }).question;
+  throw new Error("CREATE_QUESTION_INVALID_RESPONSE");
+}
+
+export type UpdateQuestionPayload = Partial<CreateQuestionPayload>;
+
+export async function updateQuestion(params: {
+  token: string;
+  id: string;
+  payload: UpdateQuestionPayload;
+}): Promise<QuestionDTO> {
+  const res = await fetch(`${API_URL}/questions/${params.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders(params.token) },
+    body: JSON.stringify(params.payload)
+  });
+
+  if (!res.ok) throw new Error(await parseError(res, `UPDATE_QUESTION_FAILED_${res.status}`));
+
+  const data: unknown = await res.json();
+  if (typeof data === "object" && data && "question" in data) return (data as { question: QuestionDTO }).question;
+  throw new Error("UPDATE_QUESTION_INVALID_RESPONSE");
+}
+
+export async function deleteQuestion(params: { token: string; id: string }): Promise<void> {
+  const res = await fetch(`${API_URL}/questions/${params.id}`, {
+    method: "DELETE",
+    headers: authHeaders(params.token)
+  });
+
+  if (res.status === 204) return;
+  if (!res.ok) throw new Error(await parseError(res, `DELETE_QUESTION_FAILED_${res.status}`));
 }

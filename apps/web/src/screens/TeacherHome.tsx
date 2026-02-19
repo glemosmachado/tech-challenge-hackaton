@@ -158,11 +158,14 @@ export default function TeacherHome() {
       <div className="topbar">
         <div className="brand">
           <h1>Professor</h1>
-          <div className="subtitle">Composição, versões A/B e gabarito</div>
+          <div className="subtitle">Provas e banco de questões</div>
         </div>
 
         <div className="userbar">
           <span>{user?.name}</span>
+          <button className="btn btn-ghost" onClick={() => navigate("/teacher/questions")}>
+            Questões
+          </button>
           <button className="btn btn-ghost" onClick={signOut}>
             Sair
           </button>
@@ -251,7 +254,9 @@ export default function TeacherHome() {
                     <button className="btn btn-ghost" style={{ height: 34, padding: "0 10px" }} onClick={() => navigate(`/teacher/exams/${ex._id}`)}>
                       Abrir
                     </button>
-                    <div className="exam-title" style={{ marginTop: 8 }}>{ex.title}</div>
+                    <div className="exam-title" style={{ marginTop: 8 }}>
+                      {ex.title}
+                    </div>
                     <div className="exam-sub">
                       {ex.subject} | {ex.grade} | {ex.topics.join(", ")}
                     </div>
