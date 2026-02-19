@@ -1,0 +1,111 @@
+.teacher-home-wrap {
+  margin-top: 8px;
+}
+
+.teacher-home-panel {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(10px);
+  padding: 18px;
+}
+
+.teacher-home-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.teacher-home-panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.teacher-home-panel-meta {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.teacher-home-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+
+.teacher-tile {
+  grid-column: span 12;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.10);
+  padding: 18px;
+  min-height: 150px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.teacher-tile::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  background:
+    radial-gradient(520px 220px at 15% 15%, rgba(0, 230, 0, 0.14), transparent 60%),
+    radial-gradient(520px 220px at 85% 15%, rgba(0, 128, 255, 0.16), transparent 60%);
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+
+.teacher-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.14);
+  border-color: rgba(0, 128, 255, 0.22);
+}
+
+.teacher-tile:hover::before {
+  opacity: 1;
+}
+
+.teacher-tile-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(0, 128, 255, 0.16), rgba(0, 230, 0, 0.10));
+  border: 1px solid rgba(0, 128, 255, 0.20);
+  color: rgba(3, 32, 73, 0.95);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.10);
+}
+
+.teacher-tile-title {
+  margin-top: 14px;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.teacher-tile-hint {
+  margin-top: 6px;
+  font-size: 13px;
+  opacity: 0.75;
+  line-height: 1.35;
+  max-width: 44ch;
+}
+
+@media (min-width: 680px) {
+  .teacher-tile {
+    grid-column: span 6;
+  }
+}
+
+@media (min-width: 1020px) {
+  .teacher-tile {
+    grid-column: span 4;
+  }
+}

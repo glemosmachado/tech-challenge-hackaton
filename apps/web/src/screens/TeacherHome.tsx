@@ -1,325 +1,106 @@
-import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "../auth/useAuth";
-import { useNavigate } from "react-router-dom";
-import {
-  composeExam,
-  deleteExam,
-  getTopics,
-  listExams,
-  renderExam,
-  type ExamDTO,
-  type ExamMode,
-  type ExamVersion,
-  type RenderExamResponse,
-  type Subject
-} from "../lib/api";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import AppShell from "../components/AppShell";
+import "../styles/teacher-home.css";
 
-function msg(e: unknown, fallback: string) {
-  return e instanceof Error ? e.message : fallback;
+type Tile = {
+  title: string;
+  to: string;
+  hint: string;
+  icon: "compose" | "exams" | "questions" | "students" | "roadmap";
+};
+
+function Icon({ name }: { name: Tile["icon"] }) {
+  if (name === "compose") {
+    return (
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+        <path d="M7 3h10a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V5a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M7 17h12" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M9 7h6M9 10h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "exams") {
+    return (
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+        <path d="M7 3h10a2 2 0 0 1 2 2v16H7a2 2 0 0 0-2 2V5a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M9 7h8M9 11h8M9 15h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "questions") {
+    return (
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+        <path d="M8 3h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M10 7h6M10 11h8M10 15h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M4 7v14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "students") {
+    return (
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+        <path d="M8 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M2 22a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M16 11h6M19 8v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+      <path d="M12 3v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M7 8l5-5 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M5 14h14v7H5v-7Z" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 17h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
 }
 
-const GRADE_OPTIONS = ["1ano", "2ano", "3ano", "4ano", "5ano", "6ano", "7ano", "8ano", "9ano"] as const;
+function TileCard({ t }: { t: Tile }) {
+  return (
+    <Link to={t.to} className="teacher-tile">
+      <div className="teacher-tile-icon">
+        <Icon name={t.icon} />
+      </div>
+      <div className="teacher-tile-title">{t.title}</div>
+      <div className="teacher-tile-hint">{t.hint}</div>
+    </Link>
+  );
+}
 
 export default function TeacherHome() {
-  const navigate = useNavigate();
-  const { user, token, signOut } = useAuth();
-
-  const [error, setError] = useState("");
-  const [loadingList, setLoadingList] = useState(false);
-
-  const [title, setTitle] = useState("Prova");
-  const [subject, setSubject] = useState<Subject>("physics");
-  const [grade, setGrade] = useState<(typeof GRADE_OPTIONS)[number]>("1ano");
-  const [mode, setMode] = useState<ExamMode>("MIXED");
-  const [count, setCount] = useState(3);
-
-  const [topics, setTopics] = useState<string[]>([]);
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [topicsLoading, setTopicsLoading] = useState(false);
-
-  const [exams, setExams] = useState<ExamDTO[]>([]);
-  const [examId, setExamId] = useState("");
-  const [rendered, setRendered] = useState<RenderExamResponse | null>(null);
-
-  const canCompose = !!token && selectedTopics.length > 0 && Number.isFinite(count) && count > 0;
-
-  async function refresh() {
-    if (!token) return;
-    setError("");
-    setLoadingList(true);
-    try {
-      const items = await listExams({ token });
-      setExams(items);
-    } catch (e) {
-      setError(msg(e, "LIST_EXAMS_FAILED"));
-    } finally {
-      setLoadingList(false);
-    }
-  }
-
-  async function loadTopics() {
-    if (!token) return;
-    setError("");
-    setTopicsLoading(true);
-    try {
-      const t = await getTopics({ token, subject, grade });
-      setTopics(t);
-      setSelectedTopics((prev) => prev.filter((x) => t.includes(x)));
-    } catch (e) {
-      setTopics([]);
-      setSelectedTopics([]);
-      setError(msg(e, "TOPICS_FAILED"));
-    } finally {
-      setTopicsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    refresh();
-  }, [token]);
-
-  useEffect(() => {
-    loadTopics();
-  }, [token, subject, grade]);
-
-  function toggleTopic(t: string) {
-    setSelectedTopics((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
-  }
-
-  async function onCompose() {
-    if (!token) return;
-    setError("");
-    try {
-      const created = await composeExam({
-        token,
-        payload: {
-          title,
-          subject,
-          grade,
-          topics: selectedTopics,
-          count,
-          mode
-        }
-      });
-      setExamId(created.exam._id);
-      setRendered(null);
-      await refresh();
-      navigate(`/teacher/exams/${created.exam._id}`);
-    } catch (e) {
-      setError(msg(e, "COMPOSE_FAILED"));
-    }
-  }
-
-  async function onRender(id: string, version: ExamVersion) {
-    if (!token) return;
-    setError("");
-    try {
-      const data = await renderExam({ token, examId: id, version, audience: "teacher" });
-      setExamId(id);
-      setRendered(data);
-    } catch (e) {
-      setError(msg(e, "RENDER_FAILED"));
-    }
-  }
-
-  async function onDelete(id: string) {
-    if (!token) return;
-    setError("");
-    try {
-      await deleteExam({ token, examId: id });
-      if (examId === id) {
-        setExamId("");
-        setRendered(null);
-      }
-      await refresh();
-    } catch (e) {
-      setError(msg(e, "DELETE_FAILED"));
-    }
-  }
-
-  const topicsUi = useMemo(() => {
-    if (topicsLoading) return <div className="card-meta">Carregando topics...</div>;
-    if (!topics.length) return <div className="card-meta">Nenhum topic para esse filtro.</div>;
-
-    return (
-      <div className="topics">
-        {topics.map((t) => (
-          <label key={t} className="topic-item">
-            <input type="checkbox" checked={selectedTopics.includes(t)} onChange={() => toggleTopic(t)} />
-            <span>{t}</span>
-          </label>
-        ))}
-      </div>
-    );
-  }, [topics, topicsLoading, selectedTopics]);
+  const tiles = useMemo<Tile[]>(
+    () => [
+      { title: "Compor prova", to: "/teacher/compose", hint: "Criar prova A/B por filtros e topics", icon: "compose" },
+      { title: "Provas criadas", to: "/teacher/exams", hint: "Abrir, visualizar A/B e deletar", icon: "exams" },
+      { title: "Banco de questões", to: "/teacher/questions", hint: "Criar, editar e deletar questões", icon: "questions" },
+      { title: "Alunos cadastrados", to: "/teacher/students", hint: "Listar e consultar alunos", icon: "students" },
+      { title: "Desenvolvimentos futuros", to: "/teacher/roadmap", hint: "Backlog do projeto e próximos passos", icon: "roadmap" }
+    ],
+    []
+  );
 
   return (
-    <div className="container">
-      <div className="topbar">
-        <div className="brand">
-          <h1>Professor</h1>
-          <div className="subtitle">Provas e banco de questões</div>
+    <AppShell>
+      <div className="teacher-home-wrap">
+        <div style={{ display: "flex", alignItems: "baseline", gap: 14, margin: "4px 0 14px" }}>
+          <h1 style={{ margin: 0, fontSize: 42, letterSpacing: "-0.02em" }}>Home</h1>
+          <div style={{ opacity: 0.75, fontSize: 14 }}>Ações do professor</div>
         </div>
 
-        <div className="userbar">
-          <span>{user?.name}</span>
-          <button className="btn btn-ghost" onClick={() => navigate("/teacher/questions")}>
-            Questões
-          </button>
-          <button className="btn btn-ghost" onClick={signOut}>
-            Sair
-          </button>
-        </div>
-      </div>
-
-      {error ? <div className="alert error">{error}</div> : null}
-
-      <section className="card">
-        <div className="card-header">
-          <h2 className="card-title">Compor prova</h2>
-          <span className="pill">Selecionados: {selectedTopics.length}</span>
-        </div>
-
-        <div className="form-grid">
-          <div className="field" style={{ gridColumn: "span 12" }}>
-            <span className="label">Título</span>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <section className="teacher-home-panel">
+          <div className="teacher-home-panel-head">
+            <h2 className="teacher-home-panel-title">Atalhos</h2>
+            <span className="teacher-home-panel-meta">Escolha uma ação</span>
           </div>
 
-          <div className="field" style={{ gridColumn: "span 12 / span 4" }}>
-            <span className="label">Disciplina</span>
-            <select className="select" value={subject} onChange={(e) => setSubject(e.target.value as Subject)}>
-              <option value="physics">physics</option>
-              <option value="geography">geography</option>
-            </select>
-          </div>
-
-          <div className="field" style={{ gridColumn: "span 12 / span 3" }}>
-            <span className="label">Série</span>
-            <select className="select" value={grade} onChange={(e) => setGrade(e.target.value as (typeof GRADE_OPTIONS)[number])}>
-              {GRADE_OPTIONS.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field" style={{ gridColumn: "span 12 / span 3" }}>
-            <span className="label">Tipo</span>
-            <select className="select" value={mode} onChange={(e) => setMode(e.target.value as ExamMode)}>
-              <option value="MIXED">MIXED</option>
-              <option value="MCQ">MCQ</option>
-              <option value="DISC">DISC</option>
-            </select>
-          </div>
-
-          <div className="field" style={{ gridColumn: "span 12 / span 2" }}>
-            <span className="label">Quantidade</span>
-            <input className="input" type="number" min={1} value={count} onChange={(e) => setCount(Number(e.target.value))} />
-          </div>
-
-          <div style={{ gridColumn: "span 12", display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="btn btn-primary" onClick={onCompose} disabled={!canCompose}>
-              Compor e abrir
-            </button>
-
-            <button className="btn btn-ghost" onClick={refresh} disabled={loadingList}>
-              {loadingList ? "Carregando..." : "Atualizar lista"}
-            </button>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 14 }}>
-          <div className="split">
-            <div className="card-meta">Topics disponíveis para o filtro selecionado</div>
-            {topicsLoading ? <span className="kbd">loading</span> : <span className="kbd">{topics.length} topics</span>}
-          </div>
-          {topicsUi}
-        </div>
-      </section>
-
-      <section className="grid-2" style={{ marginTop: 16 }}>
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">Minhas provas</h2>
-            <div className="card-meta">Total: {exams.length}</div>
-          </div>
-
-          <ul className="list">
-            {exams.map((ex) => (
-              <li key={ex._id} className="list-item">
-                <div className="exam-row">
-                  <div>
-                    <button className="btn btn-ghost" style={{ height: 34, padding: "0 10px" }} onClick={() => navigate(`/teacher/exams/${ex._id}`)}>
-                      Abrir
-                    </button>
-                    <div className="exam-title" style={{ marginTop: 8 }}>
-                      {ex.title}
-                    </div>
-                    <div className="exam-sub">
-                      {ex.subject} | {ex.grade} | {ex.topics.join(", ")}
-                    </div>
-                    <div className="exam-id">
-                      <span className="kbd">{ex._id}</span>
-                    </div>
-                  </div>
-
-                  <div className="actions">
-                    <button className="btn btn-ghost" onClick={() => onRender(ex._id, "A")}>
-                      A
-                    </button>
-                    <button className="btn btn-ghost" onClick={() => onRender(ex._id, "B")}>
-                      B
-                    </button>
-                    <button className="btn btn-danger" onClick={() => onDelete(ex._id)}>
-                      Deletar
-                    </button>
-                  </div>
-                </div>
-              </li>
+          <div className="teacher-home-grid">
+            {tiles.map((t) => (
+              <TileCard key={t.to} t={t} />
             ))}
-          </ul>
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">Prévia rápida</h2>
-            <div className="card-meta">
-              ExamId: {examId ? <span className="kbd">{examId}</span> : <span className="kbd">-</span>}
-            </div>
           </div>
-
-          {rendered ? (
-            <div>
-              <div style={{ marginBottom: 10 }}>
-                <div className="exam-title">
-                  {rendered.exam.title} (Versão {rendered.exam.version})
-                </div>
-                <div className="exam-sub">
-                  {rendered.exam.subject} | {rendered.exam.grade} | {rendered.exam.topics.join(", ")}
-                </div>
-              </div>
-
-              <ol style={{ margin: 0, paddingLeft: 18 }}>
-                {rendered.questions.slice(0, 3).map((q) => (
-                  <li key={q.id} style={{ marginBottom: 12 }}>
-                    <div style={{ fontWeight: 700 }}>{q.statement}</div>
-                  </li>
-                ))}
-              </ol>
-
-              <div style={{ marginTop: 12 }}>
-                <button className="btn btn-primary" disabled={!examId} onClick={() => navigate(`/teacher/exams/${examId}`)}>
-                  Abrir página completa
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="card-meta">Use A/B em uma prova para pré-visualizar. Para ver completo, use Abrir.</div>
-          )}
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </AppShell>
   );
 }

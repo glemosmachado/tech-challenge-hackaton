@@ -9,7 +9,7 @@ type Props = {
   children: ReactNode;
 };
 
-export default function AppShell({ schoolName = "Colégio Estadual Shirlei Gomes Santos", roleLabel, children }: Props) {
+export default function AppShell({ schoolName = "Colégio Estadual Shirlei Regina Santos", roleLabel, children }: Props) {
   const { user, signOut } = useAuth();
   const loc = useLocation();
 

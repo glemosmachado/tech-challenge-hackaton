@@ -4,6 +4,7 @@ import { healthRouter } from "./routes/health.js";
 import { questionsRouter } from "./routes/questions.js";
 import { examsRouter } from "./routes/exams.js";
 import { authRouter } from "./routes/auth.js";
+import { usersRouter } from "./routes/users.js";
 
 export function createApp() {
   const app = express();
@@ -15,6 +16,7 @@ export function createApp() {
   app.use("/auth", authRouter);
   app.use("/questions", questionsRouter);
   app.use("/exams", examsRouter);
+  app.use("/users", usersRouter);
 
   app.get("/", (_req, res) => {
     res.json({ name: "postech-api", status: "ok" });

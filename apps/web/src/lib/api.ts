@@ -74,23 +74,6 @@ export interface RenderExamResponse {
   questions: RenderedQuestion[];
 }
 
-export type QuestionDTO = {
-  _id: string;
-  teacherId: string;
-  subject: Subject;
-  grade: string;
-  topic: string;
-  difficulty: Difficulty;
-  type: QuestionType;
-  statement: string;
-  options?: string[];
-  correctIndex?: number;
-  expectedAnswer?: string;
-  rubric?: string;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
 type ApiErrorBody = { error?: unknown };
 
 function authHeaders(token?: string | null): HeadersInit {
@@ -164,29 +147,22 @@ export async function getTopics(params: { token: string; subject: Subject; grade
   const data: unknown = await res.json();
   if (typeof data === "object" && data && "topics" in data) {
     const topics = (data as { topics: unknown }).topics;
-    if (Array.isArray(topics) && topics.every((t) => typeof t === "string")) {
-      return (topics as string[]).map((t) => t.trim()).filter(Boolean).sort((a, b) => a.localeCompare(b));
-    }
+    if (Array.isArray(topics) && topics.every((t) => typeof t === "string")) return topics;
   }
-
   return [];
 }
 
 export async function composeExam(params: { token: string; payload: ComposeExamRequest }): Promise<{ exam: ExamDTO }> {
   const res = await fetch(`${API_URL}/exams/compose`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(params.token) },
+    headers: { ...authHeaders(params.token), "Content-Type": "application/json" },
     body: JSON.stringify(params.payload)
   });
 
   if (!res.ok) throw new Error(await parseError(res, `COMPOSE_FAILED_${res.status}`));
 
   const data: unknown = await res.json();
-  if (typeof data === "object" && data && "exam" in data) {
-    return { exam: (data as { exam: ExamDTO }).exam };
-  }
-
-  throw new Error("COMPOSE_INVALID_RESPONSE");
+  return data as { exam: ExamDTO };
 }
 
 export async function listExams(params: { token: string }): Promise<ExamDTO[]> {
@@ -202,27 +178,30 @@ export async function listExams(params: { token: string }): Promise<ExamDTO[]> {
     const exams = (data as { exams: unknown }).exams;
     if (Array.isArray(exams)) return exams as ExamDTO[];
   }
-
   return [];
 }
 
-export async function deleteExam(params: { token: string; examId: string }): Promise<void> {
+export async function deleteExam(params: { token: string; examId: string }): Promise<{ ok: true }> {
   const res = await fetch(`${API_URL}/exams/${params.examId}`, {
     method: "DELETE",
     headers: authHeaders(params.token)
   });
 
-  if (res.status === 204) return;
   if (!res.ok) throw new Error(await parseError(res, `DELETE_EXAM_FAILED_${res.status}`));
+  const data: unknown = await res.json();
+  return data as { ok: true };
 }
 
 export async function renderExam(params: {
   token: string;
   examId: string;
   version: ExamVersion;
-  audience: RenderAudience;
+  audience?: RenderAudience;
 }): Promise<RenderExamResponse> {
-  const qs = new URLSearchParams({ version: params.version, audience: params.audience }).toString();
+  const qs = new URLSearchParams({
+    version: params.version,
+    audience: params.audience ?? "teacher"
+  }).toString();
 
   const res = await fetch(`${API_URL}/exams/${params.examId}/render?${qs}`, {
     method: "GET",
@@ -235,34 +214,21 @@ export async function renderExam(params: {
   return data as RenderExamResponse;
 }
 
-export async function listQuestions(params: {
-  token: string;
-  subject?: Subject;
-  grade?: string;
-  topic?: string;
-  type?: QuestionType;
-  difficulty?: Difficulty;
-}): Promise<QuestionDTO[]> {
-  const qs = new URLSearchParams();
-  if (params.subject) qs.set("subject", params.subject);
-  if (params.grade) qs.set("grade", params.grade);
-  if (params.topic) qs.set("topic", params.topic);
-  if (params.type) qs.set("type", params.type);
-  if (params.difficulty) qs.set("difficulty", params.difficulty);
-
-  const res = await fetch(`${API_URL}/questions?${qs.toString()}`, {
-    method: "GET",
-    headers: authHeaders(params.token)
-  });
-
-  if (!res.ok) throw new Error(await parseError(res, `LIST_QUESTIONS_FAILED_${res.status}`));
-
-  const data: unknown = await res.json();
-  if (typeof data === "object" && data && "questions" in data) {
-    const questions = (data as { questions: unknown }).questions;
-    if (Array.isArray(questions)) return questions as QuestionDTO[];
-  }
-  return [];
+export interface QuestionDTO {
+  _id: string;
+  teacherId: string;
+  subject: Subject;
+  grade: string;
+  topic: string;
+  difficulty: Difficulty;
+  type: QuestionType;
+  statement: string;
+  options?: string[];
+  correctIndex?: number;
+  expectedAnswer?: string;
+  rubric?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type CreateQuestionPayload =
@@ -287,46 +253,97 @@ export type CreateQuestionPayload =
       rubric?: string;
     };
 
+export async function listQuestions(params: {
+  token: string;
+  subject: Subject;
+  grade: string;
+  topic?: string;
+  type?: QuestionType;
+  difficulty?: Difficulty;
+}): Promise<QuestionDTO[]> {
+  const qs = new URLSearchParams({
+    subject: params.subject,
+    grade: params.grade,
+    ...(params.topic ? { topic: params.topic } : {}),
+    ...(params.type ? { type: params.type } : {}),
+    ...(params.difficulty ? { difficulty: params.difficulty } : {})
+  }).toString();
+
+  const res = await fetch(`${API_URL}/questions?${qs}`, {
+    method: "GET",
+    headers: authHeaders(params.token)
+  });
+
+  if (!res.ok) throw new Error(await parseError(res, `LIST_QUESTIONS_FAILED_${res.status}`));
+
+  const data: unknown = await res.json();
+  if (typeof data === "object" && data && "questions" in data) {
+    const qsList = (data as { questions: unknown }).questions;
+    if (Array.isArray(qsList)) return qsList as QuestionDTO[];
+  }
+  return [];
+}
+
 export async function createQuestion(params: { token: string; payload: CreateQuestionPayload }): Promise<QuestionDTO> {
   const res = await fetch(`${API_URL}/questions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(params.token) },
+    headers: { ...authHeaders(params.token), "Content-Type": "application/json" },
     body: JSON.stringify(params.payload)
   });
 
   if (!res.ok) throw new Error(await parseError(res, `CREATE_QUESTION_FAILED_${res.status}`));
 
   const data: unknown = await res.json();
-  if (typeof data === "object" && data && "question" in data) return (data as { question: QuestionDTO }).question;
-  throw new Error("CREATE_QUESTION_INVALID_RESPONSE");
+  return data as QuestionDTO;
 }
 
-export type UpdateQuestionPayload = Partial<CreateQuestionPayload>;
-
-export async function updateQuestion(params: {
-  token: string;
-  id: string;
-  payload: UpdateQuestionPayload;
-}): Promise<QuestionDTO> {
+export async function updateQuestion(params: { token: string; id: string; payload: CreateQuestionPayload }): Promise<QuestionDTO> {
   const res = await fetch(`${API_URL}/questions/${params.id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...authHeaders(params.token) },
+    method: "PUT",
+    headers: { ...authHeaders(params.token), "Content-Type": "application/json" },
     body: JSON.stringify(params.payload)
   });
 
   if (!res.ok) throw new Error(await parseError(res, `UPDATE_QUESTION_FAILED_${res.status}`));
 
   const data: unknown = await res.json();
-  if (typeof data === "object" && data && "question" in data) return (data as { question: QuestionDTO }).question;
-  throw new Error("UPDATE_QUESTION_INVALID_RESPONSE");
+  return data as QuestionDTO;
 }
 
-export async function deleteQuestion(params: { token: string; id: string }): Promise<void> {
+export async function deleteQuestion(params: { token: string; id: string }): Promise<{ ok: true }> {
   const res = await fetch(`${API_URL}/questions/${params.id}`, {
     method: "DELETE",
     headers: authHeaders(params.token)
   });
 
-  if (res.status === 204) return;
   if (!res.ok) throw new Error(await parseError(res, `DELETE_QUESTION_FAILED_${res.status}`));
+  const data: unknown = await res.json();
+  return data as { ok: true };
+}
+
+export interface StudentDTO {
+  _id: string;
+  name: string;
+  email: string;
+  role: "STUDENT";
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function listStudents(params: { token: string }): Promise<StudentDTO[]> {
+  const qs = new URLSearchParams({ role: "STUDENT" }).toString();
+
+  const res = await fetch(`${API_URL}/users?${qs}`, {
+    method: "GET",
+    headers: authHeaders(params.token)
+  });
+
+  if (!res.ok) throw new Error(await parseError(res, `LIST_STUDENTS_FAILED_${res.status}`));
+
+  const data: unknown = await res.json();
+  if (typeof data === "object" && data && "users" in data) {
+    const users = (data as { users: unknown }).users;
+    if (Array.isArray(users)) return users as StudentDTO[];
+  }
+  return [];
 }

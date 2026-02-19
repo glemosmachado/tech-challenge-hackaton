@@ -3,12 +3,14 @@ import type { ReactElement } from "react";
 import { useAuth } from "../auth/useAuth";
 import LoginPage from "../screens/LoginPage";
 import RegisterPage from "../screens/RegisterPage";
-import TeacherDashboardPage from "../screens/TeacherDashboardPage";
+import StudentHome from "../screens/StudentHome";
+import TeacherHome from "../screens/TeacherHome";
 import TeacherComposeExamPage from "../screens/TeacherComposeExamPage";
 import TeacherExamsPage from "../screens/TeacherExamsPage";
 import TeacherQuestionsPage from "../screens/TeacherQuestionsPage";
 import TeacherExamPage from "../screens/TeacherExamPage";
-import StudentHome from "../screens/StudentHome";
+import TeacherStudentsPage from "../screens/TeacherStudentsPage";
+import TeacherRoadmapPage from "../screens/TeacherRoadmapPage";
 
 function RequireRole({ role, children }: { role: "TEACHER" | "STUDENT"; children: ReactElement }) {
   const { user, isBootstrapping } = useAuth();
@@ -31,7 +33,7 @@ export default function App() {
         path="/teacher"
         element={
           <RequireRole role="TEACHER">
-            <TeacherDashboardPage />
+            <TeacherHome />
           </RequireRole>
         }
       />
@@ -55,6 +57,15 @@ export default function App() {
       />
 
       <Route
+        path="/teacher/exams/:id"
+        element={
+          <RequireRole role="TEACHER">
+            <TeacherExamPage />
+          </RequireRole>
+        }
+      />
+
+      <Route
         path="/teacher/questions"
         element={
           <RequireRole role="TEACHER">
@@ -64,10 +75,19 @@ export default function App() {
       />
 
       <Route
-        path="/teacher/exams/:id"
+        path="/teacher/students"
         element={
           <RequireRole role="TEACHER">
-            <TeacherExamPage />
+            <TeacherStudentsPage />
+          </RequireRole>
+        }
+      />
+
+      <Route
+        path="/teacher/roadmap"
+        element={
+          <RequireRole role="TEACHER">
+            <TeacherRoadmapPage />
           </RequireRole>
         }
       />
