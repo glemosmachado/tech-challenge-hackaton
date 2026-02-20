@@ -271,32 +271,31 @@ Principais responsabilidades:
 
 ```bash
 npm install
----
 
-### Rodar API
+# Rodar API
 npm run dev:api
----
 
-### Rodar WEB
+# Rodar WEB
 npm --workspace apps/web run dev
----
-```bash
 
-### Deploy
-- API
+Deploy
+
+API
 Render
 https://tech-challenge-hackaton.onrender.com
 
-- WEB
+WEB
 Render Static Site
 https://tech-challenge-hackaton-1.onrender.com
 
-### Roadmap futuro
+Roadmap futuro
 
-- edição parcial de provas
-- área do aluno completa
-- turmas e vinculações
-- estatísticas de desempenho
-- geração de questões por IA
-- correção automática
-- melhorias de UX
+edição parcial de provas
+área do aluno completa
+turmas e vinculações
+estatísticas de desempenho
+geração de questões por IA
+correção automática
+melhorias de UX
+
+::contentReference[oaicite:0]{index=0}
