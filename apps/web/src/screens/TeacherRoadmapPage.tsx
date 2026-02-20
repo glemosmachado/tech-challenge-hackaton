@@ -1,49 +1,116 @@
 import AppShell from "../components/AppShell";
+import "../styles/roadmap.css";
+
+type Status = "Depois" | "Futuro";
 
 type Item = {
   title: string;
-  desc: string;
-  status: "Agora" | "Depois" | "Futuro";
+  status: Status;
+  summary: string;
+  deliverables: string[];
 };
 
 const ITEMS: Item[] = [
-  { title: "Abrir prova em página dedicada", desc: "Selecionar prova e abrir em /teacher/exams/:id com navegação A/B e ações.", status: "Agora" },
-  { title: "Editar prova (substituir questões)", desc: "Escolher questões para substituir sem quebrar a versão A/B.", status: "Depois" },
-  { title: "Exportar prova em PDF", desc: "Gerar PDF da versão A e B (com/sem gabarito).", status: "Depois" },
-  { title: "Área do aluno", desc: "Visualizar prova e responder (persistir respostas).", status: "Futuro" },
-  { title: "Turmas", desc: "Criar turmas, vincular alunos e provas.", status: "Futuro" },
-  { title: "Estatísticas", desc: "Desempenho por aluno/turma e dificuldade.", status: "Futuro" },
-  { title: "Geração de questões", desc: "Assistida por IA, com revisão do professor.", status: "Futuro" }
+  {
+    title: "Área do aluno (visualização e respostas)",
+    status: "Futuro",
+    summary:
+      "Permitir que o aluno acesse a prova e registre respostas, com autenticação e rastreabilidade.",
+    deliverables: [
+      "Listagem de provas disponíveis para o aluno",
+      "Registro de respostas (MCQ e discursivas)",
+      "Controle de tentativa e status (em andamento/finalizada)",
+      "Acesso seguro por JWT"
+    ]
+  },
+  {
+    title: "Gestão de turmas",
+    status: "Futuro",
+    summary:
+      "Criar turmas, vincular alunos e distribuir provas por turma.",
+    deliverables: [
+      "CRUD de turmas",
+      "Vínculo aluno ↔ turma",
+      "Atribuição de provas por turma",
+      "Visão rápida de distribuição e pendências"
+    ]
+  },
+  {
+    title: "Estatísticas e desempenho",
+    status: "Futuro",
+    summary:
+      "Relatórios de acertos, tópicos mais difíceis e evolução por turma/aluno.",
+    deliverables: [
+      "Percentual de acertos por prova",
+      "Dificuldade por tópico e por questão",
+      "Ranking e evolução por período",
+      "Exportação simples (CSV/PDF)"
+    ]
+  },
+  {
+    title: "Criação assistida de questões",
+    status: "Futuro",
+    summary:
+      "Gerar rascunhos de questões com apoio de IA e revisão obrigatória do professor.",
+    deliverables: [
+      "Sugestão de enunciados e alternativas",
+      "Validação de formato e consistência",
+      "Revisão manual antes de salvar no banco",
+      "Tag de origem e histórico de edição"
+    ]
+  }
 ];
+
+function tagClass(s: Status) {
+  if (s === "Depois") return "roadmap-tag depois";
+  return "roadmap-tag futuro";
+}
 
 export default function TeacherRoadmapPage() {
   return (
     <AppShell>
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Desenvolvimentos futuros</h1>
-          <div className="page-sub">Backlog do projeto</div>
-        </div>
-      </div>
-
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Roadmap</h2>
-          <span className="panel-meta">Itens: {ITEMS.length}</span>
-        </div>
-
-        <div className="roadmap">
-          {ITEMS.map((i) => (
-            <div key={i.title} className="roadmap-item">
-              <div className="roadmap-top">
-                <div className="roadmap-title">{i.title}</div>
-                <span className={`tag ${i.status.toLowerCase()}`}>{i.status}</span>
-              </div>
-              <div className="roadmap-desc">{i.desc}</div>
+      <div className="roadmap-wrap">
+        <div className="roadmap-head">
+          <div>
+            <h1 className="roadmap-title">Plano de evolução</h1>
+            <div className="roadmap-sub">
+              Melhorias planejadas para ampliar o controle do professor,
+              qualidade das avaliações e capacidade analítica do sistema.
             </div>
-          ))}
+          </div>
         </div>
-      </section>
+
+        <section className="roadmap-panel">
+          <div className="roadmap-meta">
+            <span className="roadmap-pill">Itens: {ITEMS.length}</span>
+            <span className="roadmap-pill">
+              Foco: estabilidade, usabilidade e impressão
+            </span>
+            <span className="roadmap-pill">
+              Público: professor (administração e controle)
+            </span>
+          </div>
+
+          <div className="roadmap-grid roadmap-grid-4">
+            {ITEMS.map((i) => (
+              <div key={i.title} className="roadmap-card">
+                <div className="roadmap-top">
+                  <div className="roadmap-card-title">{i.title}</div>
+                  <span className={tagClass(i.status)}>{i.status}</span>
+                </div>
+
+                <div className="roadmap-card-desc">{i.summary}</div>
+
+                <ul className="roadmap-list">
+                  {i.deliverables.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     </AppShell>
   );
 }

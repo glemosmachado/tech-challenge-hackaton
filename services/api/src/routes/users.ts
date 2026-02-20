@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "../middlewares/auth.js";
 import UserModel from "../models/user.js";
+import { requireAuth, requireRole } from "../middlewares/auth.js";
 
 export const usersRouter = Router();
 
