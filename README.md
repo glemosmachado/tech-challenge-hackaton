@@ -142,3 +142,160 @@ O projeto atende aos requisitos do Hackathon, entregando uma aplicação funcion
 ## Arquitetura do Projeto
 
 ### Monorepo
+- apps/
+-   web/
+-   mobile/
+
+- services/
+-   api/
+
+---
+
+### Backend
+
+Localização: `services/api`
+
+Responsabilidades:
+
+- autenticação
+- regras de negócio
+- composição de provas
+- geração A/B
+- acesso ao MongoDB
+
+---
+
+### Frontend Web
+
+Localização: `apps/web`
+
+Responsabilidades:
+
+- interface do professor
+- composição de prova
+- gestão de questões
+- visualização
+- exportação PDF
+
+---
+
+### Mobile (estrutura inicial)
+
+Localização: `apps/mobile`
+
+Status: fora do escopo atual do hackathon, preparado para evolução futura.
+
+---
+
+## Tecnologias Utilizadas
+
+### Backend
+
+- Node.js
+- Express
+- TypeScript
+- MongoDB Atlas
+- JWT
+- Mongoose
+
+---
+
+### Frontend Web
+
+- React
+- Vite
+- TypeScript
+- React Router
+- jsPDF
+- Context API (auth)
+
+---
+
+### Infraestrutura
+
+- MongoDB Atlas
+- Render (API)
+- Vercel ou Render (Web)
+- GitHub
+- GitHub Actions (estrutura preparada)
+- Docker (configuração base)
+
+---
+
+## Estrutura de Pastas (Web)
+- src/
+  - api/
+  - assets/
+  - auth/
+  - components/
+  - lib/
+  - router/
+  - screens/
+  - styles/
+
+Principais responsabilidades:
+
+- `auth/` — controle de sessão
+- `lib/api.ts` — comunicação com backend
+- `screens/` — páginas principais
+- `components/` — layout e UI reutilizável
+
+---
+
+## Fluxo da Aplicação
+
+1. Professor acessa o sistema
+2. Realiza login
+3. Token JWT é armazenado
+4. Front passa a enviar Authorization header
+5. Professor pode:
+   - compor prova
+   - visualizar provas
+   - gerenciar questões
+   - visualizar alunos
+6. Provas podem ser exportadas em PDF
+
+---
+
+## Setup do Projeto
+
+### Pré-requisitos
+
+- Node.js
+- npm
+- MongoDB Atlas configurado
+
+---
+
+### Instalação
+
+```bash
+npm install
+---
+
+### Rodar API
+npm run dev:api
+---
+
+### Rodar WEB
+npm --workspace apps/web run dev
+---
+
+### Deploy
+- API
+Render
+https://tech-challenge-hackaton.onrender.com
+
+- WEB
+Render Static Site
+https://tech-challenge-hackaton-1.onrender.com
+
+### Roadmap futuro
+
+- edição parcial de provas
+- área do aluno completa
+- turmas e vinculações
+- estatísticas de desempenho
+- geração de questões por IA
+- correção automática
+- melhorias de UX
