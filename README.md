@@ -280,6 +280,7 @@ npm run dev:api
 ### Rodar WEB
 npm --workspace apps/web run dev
 ---
+```bash
 
 ### Deploy
 - API
