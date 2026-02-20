@@ -436,20 +436,6 @@ export default function TeacherExamPage() {
           <div className="card-meta">Nada para mostrar.</div>
         )}
       </section>
-
-      <section className="card" style={{ marginTop: 16 }}>
-        <div className="card-header">
-          <h2 className="card-title">Edição de prova</h2>
-          <div className="card-meta">Próximo passo: substituir questões mantendo A/B</div>
-        </div>
-
-        <div className="card-meta">
-          Para editar do jeito certo, eu vou te entregar dois endpoints:
-          <span className="kbd" style={{ marginLeft: 8 }}>GET /exams/:id</span>
-          <span className="kbd" style={{ marginLeft: 8 }}>PATCH /exams/:id/replace</span>
-          e um modal no front para escolher a nova questão.
-        </div>
-      </section>
     </div>
   );
 }
