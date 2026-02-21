@@ -213,9 +213,9 @@ Status: fora do escopo atual do hackathon, preparado para evolução futura.
 
 ### Infraestrutura
 
-- MongoDB Atlas
+- MongoDB Compass
 - Render (API)
-- Vercel ou Render (Web)
+- Render (Web)
 - GitHub
 - GitHub Actions (estrutura preparada)
 - Docker (configuração base)
