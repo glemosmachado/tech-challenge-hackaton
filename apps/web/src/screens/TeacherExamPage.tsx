@@ -335,7 +335,6 @@ export default function TeacherExamPage() {
       <div className="topbar">
         <div className="brand">
           <h1>Prova</h1>
-          <div className="subtitle">Visualização completa, A/B, exportação e exclusão</div>
         </div>
 
         <div className="userbar">
@@ -383,7 +382,6 @@ export default function TeacherExamPage() {
       <section className="card" style={{ marginTop: 16 }}>
         <div className="card-header">
           <h2 className="card-title">Visualização</h2>
-          <div className="card-meta">Leitura fácil</div>
         </div>
 
         {header}

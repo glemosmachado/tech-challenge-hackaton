@@ -187,9 +187,23 @@ export async function deleteExam(params: { token: string; examId: string }): Pro
     headers: authHeaders(params.token)
   });
 
-  if (!res.ok) throw new Error(await parseError(res, `DELETE_EXAM_FAILED_${res.status}`));
-  const data: unknown = await res.json();
-  return data as { ok: true };
+  if (!res.ok) {
+    throw new Error(await parseError(res, `DELETE_EXAM_FAILED_${res.status}`));
+  }
+
+  if (res.status === 204) return { ok: true };
+
+  const text = await res.text().catch(() => "");
+  if (!text.trim()) return { ok: true };
+
+  try {
+    const data = JSON.parse(text) as unknown;
+    if (typeof data === "object" && data && "ok" in data) return data as { ok: true };
+  } catch {
+    return { ok: true };
+  }
+
+  return { ok: true };
 }
 
 export async function renderExam(params: {
